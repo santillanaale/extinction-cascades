@@ -19,3 +19,16 @@ plotweb(nets[["CH.2018.1", method="normal", text.rot=90, labsize]])
 
 
 load("../../../ca_survey_saved/data_original/networks/nets.Rdata")
+
+
+
+
+
+
+
+
+
+
+
+
+
