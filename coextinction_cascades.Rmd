@@ -7,9 +7,24 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+library(bipartite)
+library(fossil)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(networkD3)
+library(terra)
+library(lme4)
+library(ggspatial)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(sf)
+library(viridis)
 ```
 
 second.extinct calculates the consequences of removing a species from a bipartite network. With plotting and slope-estimation functionality.
+
 Details: The procedure of this function is simple. For example imagine the web to represent a pollination web, in which pollinators die one by one. Set all entries of a column to zero, see how may rows are now also all-zero (i.e. species that are now not pollinated any more), and count these as secondary extinctions of the primary exterminated pollinator.
 
 Internally, each extermination is achieved by a call to extinction, followed by a call to empty, which counts the number of all-zero columns and rows.
@@ -25,8 +40,9 @@ Arguments:
 Note: networklevel calls second.extinct; extinction and empty are internal helper functions, and slope.bipartite calculates extinction slopes from the output of second.extinct.
 
 ```{r second.extinct}
-?second.extinct
-
+# ?second.extinct
+# ?slope.bipartite
+# ?robustness
 ```
 
 bipartite function "networklevel" gives outputs:
@@ -39,32 +55,450 @@ slope.bipartite fits a hyperbolic function to the extinction simulation of "seco
 This function scales extinction sequences to values between 0 and 1 for each participant. 
 The x-axis of the graph features the proportion of exterminated participants, while the y-axis depicts the proportion of secondary extinctions. Since these curves usually follow a hyperbolic function (see examples in Memmott et al. 2004), this is fitted to the data.
 
-```{r slope.bipartite}
-?slope.bipartite
+## Sky Islands Networks
+
+``` {r load sky islands networks}
+load("../skyIslands/data/networks/Yr_PlantPollinator_Bees.RData") #yearly networks for bees
+# load("../skyIslands/data/networks/YrSR_PlantPollinator_Bees.RData") #survey round networks for bees
+
+```
+
+```{r robustness}
+# networklevel(nets[["CH.2018"]])
+# 
+# trial <- second.extinct(nets[["CH.2018"]], participant = "higher", method = "abun", nrep = 500, details = FALSE)
+# trial_slope <- slope.bipartite(trial, plot.it = TRUE)
+
+# Create an empty data frame to store the results
+robustness_results <- data.frame(Network = character(), Site = character(), Year = integer(), Robustness = numeric(), stringsAsFactors = FALSE)
+
+# Loop through each network in the list `nets`
+for (net_name in names(nets)) {
+  # Extract the network
+  network <- nets[[net_name]]
+  
+  # Run extinction simulation
+  network_ext <- second.extinct(network, participant = "higher", method = "abun", nrep = 50, details = FALSE)
+  
+  # Calculate the robustness (area under second.extinct curve)
+  network_robustness <- robustness(network_ext)
+  
+  # Extract Site and Year from the network name
+  site_year <- unlist(strsplit(net_name, "\\.")) # Split by "."
+  site <- site_year[1]
+  year <- as.integer(site_year[2])
+  
+  # Append the results to the data frame
+  robustness_results <- rbind(robustness_results, data.frame(Network = net_name, Site = site, Year = year, Robustness = network_robustness))
+}
+
+# Print the resulting data frame
+print(robustness_results)
+
+```
+
+Import Precipitation Rasters from PRISM
+
+``` {r import rasters}
+precip_2011_06_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201106_bil.bil")
+precip_2011_07_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201107_bil.bil")
+precip_2011_08_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201108_bil.bil")
+precip_2011_09_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201109_bil.bil")
+
+precip_2016_06_raster <- rast("PRISM_summer_precip/2016/PRISM_ppt_stable_4kmM3_201606_bil.bil")
+precip_2016_07_raster <- rast("PRISM_summer_precip/2016/PRISM_ppt_stable_4kmM3_201607_bil.bil")
+precip_2016_08_raster <- rast("PRISM_summer_precip/2016/PRISM_ppt_stable_4kmM3_201608_bil.bil")
+precip_2016_09_raster <- rast("PRISM_summer_precip/2016/PRISM_ppt_stable_4kmM3_201609_bil.bil")
+
+precip_2017_06_raster <- rast("PRISM_summer_precip/2017/PRISM_ppt_stable_4kmM3_201706_bil.bil")
+precip_2017_07_raster <- rast("PRISM_summer_precip/2017/PRISM_ppt_stable_4kmM3_201707_bil.bil")
+precip_2017_08_raster <- rast("PRISM_summer_precip/2017/PRISM_ppt_stable_4kmM3_201708_bil.bil")
+precip_2017_09_raster <- rast("PRISM_summer_precip/2017/PRISM_ppt_stable_4kmM3_201709_bil.bil")
+
+precip_2020_06_raster <- rast("PRISM_summer_precip/2020/PRISM_ppt_stable_4kmM3_202006_bil.bil")
+precip_2020_07_raster <- rast("PRISM_summer_precip/2020/PRISM_ppt_stable_4kmM3_202007_bil.bil")
+precip_2020_08_raster <- rast("PRISM_summer_precip/2020/PRISM_ppt_stable_4kmM3_202008_bil.bil")
+precip_2020_09_raster <- rast("PRISM_summer_precip/2020/PRISM_ppt_stable_4kmM3_202009_bil.bil")
+
+precip_2021_06_raster <- rast("PRISM_summer_precip/2021/PRISM_ppt_stable_4kmM3_202106_bil.bil")
+precip_2021_07_raster <- rast("PRISM_summer_precip/2021/PRISM_ppt_stable_4kmM3_202107_bil.bil")
+precip_2021_08_raster <- rast("PRISM_summer_precip/2021/PRISM_ppt_stable_4kmM3_202108_bil.bil")
+precip_2021_09_raster <- rast("PRISM_summer_precip/2021/PRISM_ppt_stable_4kmM3_202109_bil.bil")
+
+# Define the years and file paths
+years <- c("2011", "2016", "2017", "2020", "2021")
+months <- c("06", "07", "08", "09")
+base_path <- "PRISM_summer_precip"
+
+# Initialize a list to store the summed rasters for each year
+summer_rasters <- list()
+
+# Loop through each year
+for (year in years) {
+  
+  # Initialize an empty list to hold monthly rasters
+  monthly_rasters <- list()
+  
+  # Loop through each month
+  for (month in months) {
+    # Construct the file path
+    file_path <- file.path(base_path, year, paste0("PRISM_ppt_stable_4kmM3_", year, month, "_bil.bil"))
+    
+    # Load the raster and append to the list
+    monthly_rasters[[month]] <- rast(file_path)
+  }
+  
+  # Stack and sum the monthly rasters
+  stacked_rasters <- rast(monthly_rasters)
+  summer_raster <- sum(stacked_rasters, na.rm = TRUE)
+  
+  # Save the raster to the list
+  summer_rasters[[year]] <- summer_raster
+  
+  # Optionally, save the raster to a file
+  #writeRaster(summer_raster, paste0("precip_", year, "_raster.tif"), overwrite = TRUE)
+  
+  # Print a message for progress tracking
+  print(paste("Processed year:", year))
+}
+
+precip_2011_raster <- summer_rasters[["2011"]]
+precip_2016_raster <- summer_rasters[["2016"]]
+precip_2017_raster <- summer_rasters[["2017"]]
+precip_2020_raster <- summer_rasters[["2020"]]
+precip_2021_raster <- summer_rasters[["2021"]]
+
+# Identify variables with the pattern "precip_****_**_raster"
+monthly_rasters <- ls(pattern = "^precip_\\d{4}_\\d{2}_raster$")
+rm(list = monthly_rasters)
+
+```
+
+Import Sites Shapefile and Change CRS
+
+``` {r import site shapefile}
+sites_shp <- vect("Sites/sites.shp")
+print(crs(sites_shp))
+print(crs(precip_2011_raster))
+sites_shp <- project(sites_shp, crs(precip_2011_raster))
+```
+
+Extract Precipitation Data for Sites
+``` {r for loop}
+years <- c(2011, 2016, 2017, 2020, 2021)
+results_list <- list()
+
+for (year in years) {
+  # Load the raster for the year
+  raster <- rast(paste0("PRISM_precip/PRISM_ppt_stable_4kmM3_", year, "_bil.bil")) 
+  
+  # Extract precipitation values for subsites
+  precip_values <- extract(raster, sites_shp)
+  
+  # Combine extracted values with site shapefile data
+  subsite_data <- as.data.frame(sites_shp) # Convert shapefile to a data frame
+  subsite_data$Precipitation <- precip_values[, 2] # Add extracted values
+  subsite_data$Year <- year # Add the year
+  
+  # Group by Site and Year, then calculate mean precipitation
+  site_data <- subsite_data %>%
+    group_by(Site, Year) %>%
+    summarize(Mean_Precipitation = mean(Precipitation, na.rm = TRUE), .groups = "drop")
+  
+  # Store the yearly averaged data in the results list
+  results_list[[as.character(year)]] <- site_data
+}
+
+# Combine all yearly site-level results into a single data frame
+all_precip_data <- do.call(rbind, results_list)
+```
+
+Merge with Robustness Results
+``` {r merge precip with robustness}
+# Add one year to the precipitation year to align with robustness data
+all_precip_data <- all_precip_data %>%
+  mutate(Year = Year + 1) 
+
+final_data <- merge(robustness_results, all_precip_data, by = c("Site", "Year"))
+final_data <- final_data %>%
+  filter(!Site %in% c("SS", "UK", "VC"))
+```
+
+Fit a Linear Mixed-effects Model
+``` {r model}
+model <- lmer(Robustness ~ Mean_Precipitation + Year + (1 | Site), data = final_data)
+
+summary(model)
+```
+
+Visualize
+``` {r visualization}
+# # Plot Robustness vs. Mean_Precipitation by year
+# ggplot(final_data, aes(x = Mean_Precipitation, y = Robustness, color = as.factor(Year))) +
+#   geom_point(size = 3) +
+#   geom_smooth(method = "lm", se = FALSE) +
+#   labs(title = "Network Robustness vs. Summer Precipitation by Year",
+#        x = "Mean Precipitation (previous summer) (mm)",
+#        y = "Network Robustness",
+#        color = "Year") +
+#   theme_minimal()
+  
+ggplot(final_data, aes(x = Mean_Precipitation, y = Robustness, color = Site, shape = as.factor(Year))) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = FALSE, aes(group = 1), color = "black", linetype = "dashed") +
+  labs(
+    title = "Network Robustness by Precipitation and Site",
+    subtitle = "Mixed-effects model: small site-level variance, negative trend with precipitation",
+    x = "Mean Precipitation (previous year) (mm)",
+    y = "Network Robustness",
+    color = "Site",
+    shape = "Year"
+  ) +
+  annotate("text", x = 500, y = 0.2, label = "Slope = -0.00028\nSite variance = 0.0052\np-value = 0.086", size = 4, color = "blue") +
+  theme_minimal()
+
+
+
+# # Plot Robustness vs Mean_Precipitation by site
+# ggplot(final_data, aes(x = Mean_Precipitation, y = Robustness)) +
+#   geom_point(aes(color = Site), size = 3) +       # Points colored by Site
+#   geom_smooth(method = "lm", se = TRUE, color = "blue") + # Add linear regression line
+#   theme_minimal() +
+#   labs(title = "Robustness vs. Summer Precipitation",
+#        x = "Mean Precipitation (previous summer) (mm)",
+#        y = "Network Robustness")
 ```
 
 
-
-```{r echo=FALSE, out.width='50%', fig.align='center'}
-knitr::include_graphics("Figure4a_Memmott2004.png")
+Sankey Plot
+``` {r sankey}
+# makeSankeyPlot<- function(i){
+#   print(i)
+#   print(names(nets)[i])
+#   data_long <- as.data.frame(nets[[i]]) %>%
+#     rownames_to_column %>%
+#     gather(key = 'key', value = 'value', -rowname) %>%
+#     filter(value > 0)
+#   colnames(data_long) <- c("source", "target", "value")
+#   data_long$target <- paste(data_long$target, " ", sep="")
+#   
+#   ## From these flows we need to create a node data frame: it lists
+#   ## every entities involved in the flow
+#   nodes <- data.frame(name=c(as.character(data_long$source),
+#                              as.character(data_long$target)) %>% unique())
+#   
+#   ## With networkD3, connection must be provided using id, not using
+#   ## real name like in the links dataframe.. So we need to reformat
+#   ## it.
+#   data_long$IDsource=match(data_long$source, nodes$name)-1 
+#   data_long$IDtarget=match(data_long$target, nodes$name)-1  
+#   net.p <- sankeyNetwork(Links = data_long, Nodes = nodes,
+#                          Source = "IDsource", Target = "IDtarget",
+#                          Value = "value", NodeID = "name", 
+#                          fontSize=18)
+#   ## colourScale=rainbow(
+#   ##   prod(dim(bee.nets[[i]]))))
+#   saveNetwork(net.p, sprintf("figures/sankey_%s.html",
+#                              gsub(" ", "", names(nets)[i])))
+#   webshot(sprintf("figures/sankey_%s.html",
+#                   gsub(" ", "", names(nets)[i])),
+#           file=sprintf("figures/sankey_%s.jpeg",
+#                        gsub(" ", "",
+#                             names(nets)[i])),
+#           vwidth = 650, vheight = 1400)
+#   
+# }
+# lapply(1:length(nets), makeSankeyPlot)
 ```
-Examples
 
-```{r second.extinct.examples}
-## Not run: 
-data(Safariland)
-(ex <- second.extinct(Safariland, participant="lower", method="random", nrep=50, 
-	details=TRUE))
-(ex <- second.extinct(Safariland, participant="higher", method="abundance", nrep=50, 
-	details=FALSE))
 
-## End(Not run)
+Extinction Curve Plot
+``` {r extinction curve}
+trial <- second.extinct(nets[["CH.2018"]], participant = "higher", method = "abun", nrep = 1000, details = FALSE)
+trial_slope <- slope.bipartite(trial, plot.it = TRUE, ylab="y")
 ```
 
+Map of Sky Islands
+``` {r sky islands map}
+# Load the country or region boundary
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+# (Optional) Subset for specific countries if relevant
+world <- world[world$name %in% c("United States of America"), ]
+
+# Get U.S. state boundaries
+states <- ne_states(country = "United States of America", returnclass = "sf")
 
 
+sites <- st_as_sf(sites_shp)
+
+ggplot() +
+  # Add basemap
+  geom_sf(data = world, fill = "lightgray", color = "white") +
+  
+  # Add your sites
+  geom_sf(data = sites, color = "red", size = 3, shape = 21, fill = "yellow") +
+  
+  # Add state boundaries
+  geom_sf(data = states, fill = NA, color = "black", linetype = "dashed") +
+  
+  # Add optional scalebar and north arrow
+  annotation_scale(location = "bl", width_hint = 0.5) +
+  annotation_north_arrow(location = "bl", which_north = "true", 
+                         style = north_arrow_fancy_orienteering) +
+  
+  # Define map extent for the southwestern U.S.
+  coord_sf(xlim = c(-115, -102), ylim = c(30, 38), expand = FALSE) +
+  
+  # Customize the appearance
+  theme_minimal() +
+  labs(title = "Sky Island Sites",
+       subtitle = "Geographic distribution in the Southwestern U.S.",
+       x = "Longitude", y = "Latitude")
+```
+Precipitation map
+``` {r precip map}
+# # Define a list of the rasters
+# rasters <- list(
+#   precip_2011 = precip_2011_raster,
+#   precip_2016 = precip_2016_raster,
+#   precip_2017 = precip_2017_raster,
+#   precip_2020 = precip_2020_raster,
+#   precip_2021 = precip_2021_raster
+# )
+# 
+# # Define a list of corresponding years for labeling
+# years <- c("2011", "2016", "2017", "2020", "2021")
+# 
+# # Calculate global minimum and maximum precipitation values across all rasters
+# min_precip <- min(sapply(rasters, function(r) min(values(r), na.rm = TRUE)))
+# max_precip <- max(sapply(rasters, function(r) max(values(r), na.rm = TRUE)))
+# 
+# # Loop through each raster and create a plot for each year
+# for (i in 1:length(rasters)) {
+#   
+#   # Get the current raster and year
+#   current_raster <- rasters[[i]]
+#   current_year <- years[i]
+#   
+#   # Convert the current raster to a data.frame for ggplot
+#   precip_df <- as.data.frame(current_raster, xy = TRUE, na.rm = TRUE)
+#   
+#   # Rename the third column to "precip"
+#   colnames(precip_df)[3] <- "precip"
+#   
+#   # Apply log transformation to precipitation values (log(x + 1) to avoid log(0))
+#   precip_df$precip_log <- log(precip_df$precip + 1)
+#   
+#   # Create the plot for the current year
+#   plot <- ggplot() +
+#     # Add the precipitation raster layer
+#     geom_raster(data = precip_df, aes(x = x, y = y, fill = precip_log)) +
+#     
+#     # Add a color scale for the precipitation
+#    scale_fill_viridis(option = "D", name = paste("Precipitation", year, "(log scale)"), direction = 1, 
+#                       limits = c(log(min_precip + 1), log(max_precip + 1))) +
+#     
+#     # Add the site locations
+#     geom_sf(data = sites, color = "red", size = 3, shape = 21, fill = "yellow") +
+#     
+#     # Customize map extent (adjust as needed)
+#     coord_sf(xlim = c(-111, -105), ylim = c(31, 37), expand = FALSE) +
+#     
+#     # Customize the appearance
+#     theme_minimal() +
+#     labs(
+#       title = paste("Sky Island Sites and Precipitation in", current_year, "(log-transformed)"),
+#       subtitle = paste("Precipitation layer for the year", current_year),
+#       x = "Longitude", 
+#       y = "Latitude"
+#     ) +
+#     theme(legend.position = "right")
+#   
+#   # Print the plot for the current year
+#   print(plot)
+# }
+
+# Define a list of the rasters
+rasters <- list(
+  precip_2011 = precip_2011_raster,
+  precip_2016 = precip_2016_raster,
+  precip_2017 = precip_2017_raster,
+  precip_2020 = precip_2020_raster,
+  precip_2021 = precip_2021_raster
+)
+
+# Define a list of corresponding years for labeling
+years <- c("2011", "2016", "2017", "2020", "2021")
+
+# Calculate global minimum and maximum precipitation values across all rasters
+min_precip <- min(sapply(rasters, function(r) min(values(r), na.rm = TRUE)))
+max_precip <- max(sapply(rasters, function(r) max(values(r), na.rm = TRUE)))
+
+# Create an empty list to store all the data for ggplot
+plot_data <- list()
+
+# Loop through each raster and prepare data for ggplot
+for (i in 1:length(rasters)) {
+  
+  # Get the current raster and year
+  current_raster <- rasters[[i]]
+  current_year <- years[i]
+  
+  # Convert the current raster to a data.frame for ggplot
+  precip_df <- as.data.frame(current_raster, xy = TRUE, na.rm = TRUE)  # Remove NAs
+  
+  # Rename the third column to "precip"
+  colnames(precip_df)[3] <- "precip"
+  
+  # Apply log transformation to precipitation values (log(x + 1) to avoid log(0))
+  precip_df$precip_log <- log(precip_df$precip + 1)
+  
+  # Add the year to the data for faceting
+  precip_df$year <- current_year
+  
+  # Store the data in the list
+  plot_data[[i]] <- precip_df
+}
+
+# Combine all the data into a single data frame
+plot_data_df <- do.call(rbind, plot_data)
+
+# Create the plot with facet wrap
+plot <- ggplot(plot_data_df) +
+  # Add the precipitation raster layer
+  geom_raster(aes(x = x, y = y, fill = precip_log)) +
+  
+  # Add a color scale for the precipitation with fixed limits for consistency
+  scale_fill_viridis(option = "D", name = "Precipitation",
+                     direction = 1) +
+# limits = c(log(min_precip + 1), log(max_precip + 1))) +
+  
+  # Add the site locations
+  geom_sf(data = sites, color = "black", size = 3, shape = 21, fill = "grey") +
+  
+  # Customize map extent (adjust as needed)
+  coord_sf(xlim = c(-111, -105), ylim = c(31, 37), expand = FALSE) +
+  
+  # Customize the appearance
+  theme_minimal() +
+  labs(
+    title = "Sky Island Sites and Precipitation",
+    subtitle = "Summer precipitation layer for different years (log-transformed)",
+    x = "Longitude", 
+    y = "Latitude"
+  ) +
+  # Round axis labels
+  scale_x_continuous(breaks = seq(-110, -106, by = 2), 
+                     labels = function(x) round(x, 2)) +  # Adjust longitude rounding
+  scale_y_continuous(breaks = seq(31, 37, by = 1), 
+                     labels = function(y) round(y, 2)) +  # Adjust latitude rounding
+  
+  # Facet wrap by year
+  facet_wrap(~ year, nrow=1)
+
+# Print the plot
+print(plot)
 
 
-
-
-
+```
