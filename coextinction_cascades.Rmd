@@ -1,7 +1,7 @@
 ---
-title: "coextinction_cascades"
+title: "Linking Summer Precipitation to Pollination Network Robustness in Sky Island Ecosystems"
 author: "Alejandro Santillana"
-date: "2024-11-20"
+date: "2024-12-09"
 output: html_document
 ---
 
@@ -21,85 +21,39 @@ library(rnaturalearth)
 library(rnaturalearthdata)
 library(sf)
 library(viridis)
+library(webshot)
 ```
+## Introduction
+Plant-pollinator networks represent the intricate dependencies between species that sustain ecosystem services, like pollination. However, increasing anthropogenic pressures, including habitat fragmentation and climate change, destabilize these interactions (Urban 2015). This project investigates coextinction cascades—a phenomenon where primary species loss triggers secondary extinctions within ecological networks (Memmott et al. 2004; Kaiser-Bunbury et al. 2010). Quantifying community robustness—defined as the ability of networks to resist species loss—is critical for understanding ecosystem stability (Dunne et al. 2002). To quantify robustness, I simulated extinction cascades in bipartite networks ordered by species abundance.
 
-second.extinct calculates the consequences of removing a species from a bipartite network. With plotting and slope-estimation functionality.
+Precipitation is critical in arid ecosystems like the Sky Islands, influencing floral resource availability and pollinator activity patterns, and is increasingly important as climate change impacts this region (Brusca et al. 2013). Summer precipitation totals provide a meaningful measure of climatic stress during peak pollination periods.
 
-Details: The procedure of this function is simple. For example imagine the web to represent a pollination web, in which pollinators die one by one. Set all entries of a column to zero, see how may rows are now also all-zero (i.e. species that are now not pollinated any more), and count these as secondary extinctions of the primary exterminated pollinator.
+My project focuses on the following questions:
 
-Internally, each extermination is achieved by a call to extinction, followed by a call to empty, which counts the number of all-zero columns and rows.
+How robust are plant-pollinator networks in the Madrean Sky Islands to species loss ordered by abundance?
+How do environmental factors, specifically precipitation, relate to network robustness?
+Can climatic data provide predictive insights into the vulnerability of specific sites?
 
-Although written for pollination webs (hence the nomenclature of pollinator and plant), it can be similarly applied to other types of bipartite networks. It is called by networklevel.
-Usage: second.extinct(web, participant = "higher", method = "abun", nrep = 10, details = FALSE, ext.row=NULL, ext.col=NULL)
+These questions explore new dimensions of bee conservation and ecological stability, leveraging both the Sky Islands and climate datasets. This analysis can guide targeted conservation interventions and improve understanding of ecological resilience.
 
-Arguments:
-  method: Random deletion of a species (random); according to its abundance, with least abundant going extinct first (abundance; default) or "degree" to build a sequence from the best-to-least connected species. This is the most extreme case, where the most generalist species goes extinct first (see Memmott et al. 1998). (Note that method="abundance" does not work with participant="both"; in this case a random sequence of species from both trophic levels is generated.) external will use the externally provided vector to determine extinction sequence.
-  ext.row: Optional vector giving the sequence in which lower-level species are to be deleted.
-  ext.col: Optional vector giving the sequence in which higher-level species are to be deleted.
-  
-Note: networklevel calls second.extinct; extinction and empty are internal helper functions, and slope.bipartite calculates extinction slopes from the output of second.extinct.
+## Data
+Datasets Used:
 
-```{r second.extinct}
-# ?second.extinct
-# ?slope.bipartite
-# ?robustness
-```
+Sky Islands dataset (2012, 2017, 2018, 2021, 2022): Bipartite plant-pollinator matrices.
+PRISM Climate Data: Monthly precipitation rasters providing high-resolution climatic context.
+Site Metadata: Geospatial and sampling information necessary for aligning networks with climate data.
 
-bipartite function "networklevel" gives outputs:
- $‘extinction slope lower trophic level‘ [1] 2.286152 
- $‘extinction slope higher trophic level‘ [1] 2.9211
+Data Cleaning:
 
-Extinction slopes are hyperbolic fits to a simulated extinction sequence of the network, which causes secondary extinctions in the other trophic level (from Memmott 2004).
+Plant-Pollinator Networks: Ensure matrices are complete, visualize network structures, and filter incomplete surveys.
+Climate Data: Extract precipitation values for each site and season, ensuring alignment with sampling years and locations.
 
-slope.bipartite fits a hyperbolic function to the extinction simulation of "second.extinct."
-This function scales extinction sequences to values between 0 and 1 for each participant. 
-The x-axis of the graph features the proportion of exterminated participants, while the y-axis depicts the proportion of secondary extinctions. Since these curves usually follow a hyperbolic function (see examples in Memmott et al. 2004), this is fitted to the data.
+### Import Precipitation Rasters from PRISM
 
-## Sky Islands Networks
-
-``` {r load sky islands networks}
-load("../skyIslands/data/networks/Yr_PlantPollinator_Bees.RData") #yearly networks for bees
-# load("../skyIslands/data/networks/YrSR_PlantPollinator_Bees.RData") #survey round networks for bees
-
-```
-
-```{r robustness}
-# networklevel(nets[["CH.2018"]])
-# 
-# trial <- second.extinct(nets[["CH.2018"]], participant = "higher", method = "abun", nrep = 500, details = FALSE)
-# trial_slope <- slope.bipartite(trial, plot.it = TRUE)
-
-# Create an empty data frame to store the results
-robustness_results <- data.frame(Network = character(), Site = character(), Year = integer(), Robustness = numeric(), stringsAsFactors = FALSE)
-
-# Loop through each network in the list `nets`
-for (net_name in names(nets)) {
-  # Extract the network
-  network <- nets[[net_name]]
-  
-  # Run extinction simulation
-  network_ext <- second.extinct(network, participant = "higher", method = "abun", nrep = 50, details = FALSE)
-  
-  # Calculate the robustness (area under second.extinct curve)
-  network_robustness <- robustness(network_ext)
-  
-  # Extract Site and Year from the network name
-  site_year <- unlist(strsplit(net_name, "\\.")) # Split by "."
-  site <- site_year[1]
-  year <- as.integer(site_year[2])
-  
-  # Append the results to the data frame
-  robustness_results <- rbind(robustness_results, data.frame(Network = net_name, Site = site, Year = year, Robustness = network_robustness))
-}
-
-# Print the resulting data frame
-print(robustness_results)
-
-```
-
-Import Precipitation Rasters from PRISM
+The following script processes monthly precipitation rasters for summer months (June–September) across multiple years. These are summed to provide seasonal totals for analysis.
 
 ``` {r import rasters}
+# Import monthly precipitation data for each field season
 precip_2011_06_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201106_bil.bil")
 precip_2011_07_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201107_bil.bil")
 precip_2011_08_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201108_bil.bil")
@@ -155,8 +109,6 @@ for (year in years) {
   # Save the raster to the list
   summer_rasters[[year]] <- summer_raster
   
-  # Optionally, save the raster to a file
-  #writeRaster(summer_raster, paste0("precip_", year, "_raster.tif"), overwrite = TRUE)
   
   # Print a message for progress tracking
   print(paste("Processed year:", year))
@@ -174,7 +126,10 @@ rm(list = monthly_rasters)
 
 ```
 
-Import Sites Shapefile and Change CRS
+### Import and Transform Spatial Data
+
+The following script imports a shapefile for study sites, ensuring consistency in coordinate reference systems (CRS) with PRISM rasters.
+
 
 ``` {r import site shapefile}
 sites_shp <- vect("Sites/sites.shp")
@@ -182,143 +137,11 @@ print(crs(sites_shp))
 print(crs(precip_2011_raster))
 sites_shp <- project(sites_shp, crs(precip_2011_raster))
 ```
+### Geospatial Visualization
 
-Extract Precipitation Data for Sites
-``` {r for loop}
-years <- c(2011, 2016, 2017, 2020, 2021)
-results_list <- list()
+Sky Islands Map
+The map contextualizes the geographic positioning of the Sky Islands, a biodiversity hotspot spanning the southwestern U.S. and northern Mexico. Sites sampled are in the states of New Mexico and Arizona.
 
-for (year in years) {
-  # Load the raster for the year
-  raster <- rast(paste0("PRISM_precip/PRISM_ppt_stable_4kmM3_", year, "_bil.bil")) 
-  
-  # Extract precipitation values for subsites
-  precip_values <- extract(raster, sites_shp)
-  
-  # Combine extracted values with site shapefile data
-  subsite_data <- as.data.frame(sites_shp) # Convert shapefile to a data frame
-  subsite_data$Precipitation <- precip_values[, 2] # Add extracted values
-  subsite_data$Year <- year # Add the year
-  
-  # Group by Site and Year, then calculate mean precipitation
-  site_data <- subsite_data %>%
-    group_by(Site, Year) %>%
-    summarize(Mean_Precipitation = mean(Precipitation, na.rm = TRUE), .groups = "drop")
-  
-  # Store the yearly averaged data in the results list
-  results_list[[as.character(year)]] <- site_data
-}
-
-# Combine all yearly site-level results into a single data frame
-all_precip_data <- do.call(rbind, results_list)
-```
-
-Merge with Robustness Results
-``` {r merge precip with robustness}
-# Add one year to the precipitation year to align with robustness data
-all_precip_data <- all_precip_data %>%
-  mutate(Year = Year + 1) 
-
-final_data <- merge(robustness_results, all_precip_data, by = c("Site", "Year"))
-final_data <- final_data %>%
-  filter(!Site %in% c("SS", "UK", "VC"))
-```
-
-Fit a Linear Mixed-effects Model
-``` {r model}
-model <- lmer(Robustness ~ Mean_Precipitation + Year + (1 | Site), data = final_data)
-
-summary(model)
-```
-
-Visualize
-``` {r visualization}
-# # Plot Robustness vs. Mean_Precipitation by year
-# ggplot(final_data, aes(x = Mean_Precipitation, y = Robustness, color = as.factor(Year))) +
-#   geom_point(size = 3) +
-#   geom_smooth(method = "lm", se = FALSE) +
-#   labs(title = "Network Robustness vs. Summer Precipitation by Year",
-#        x = "Mean Precipitation (previous summer) (mm)",
-#        y = "Network Robustness",
-#        color = "Year") +
-#   theme_minimal()
-  
-ggplot(final_data, aes(x = Mean_Precipitation, y = Robustness, color = Site, shape = as.factor(Year))) +
-  geom_point(size = 3) +
-  geom_smooth(method = "lm", se = FALSE, aes(group = 1), color = "black", linetype = "dashed") +
-  labs(
-    title = "Network Robustness by Precipitation and Site",
-    subtitle = "Mixed-effects model: small site-level variance, negative trend with precipitation",
-    x = "Mean Precipitation (previous year) (mm)",
-    y = "Network Robustness",
-    color = "Site",
-    shape = "Year"
-  ) +
-  annotate("text", x = 500, y = 0.2, label = "Slope = -0.00028\nSite variance = 0.0052\np-value = 0.086", size = 4, color = "blue") +
-  theme_minimal()
-
-
-
-# # Plot Robustness vs Mean_Precipitation by site
-# ggplot(final_data, aes(x = Mean_Precipitation, y = Robustness)) +
-#   geom_point(aes(color = Site), size = 3) +       # Points colored by Site
-#   geom_smooth(method = "lm", se = TRUE, color = "blue") + # Add linear regression line
-#   theme_minimal() +
-#   labs(title = "Robustness vs. Summer Precipitation",
-#        x = "Mean Precipitation (previous summer) (mm)",
-#        y = "Network Robustness")
-```
-
-
-Sankey Plot
-``` {r sankey}
-# makeSankeyPlot<- function(i){
-#   print(i)
-#   print(names(nets)[i])
-#   data_long <- as.data.frame(nets[[i]]) %>%
-#     rownames_to_column %>%
-#     gather(key = 'key', value = 'value', -rowname) %>%
-#     filter(value > 0)
-#   colnames(data_long) <- c("source", "target", "value")
-#   data_long$target <- paste(data_long$target, " ", sep="")
-#   
-#   ## From these flows we need to create a node data frame: it lists
-#   ## every entities involved in the flow
-#   nodes <- data.frame(name=c(as.character(data_long$source),
-#                              as.character(data_long$target)) %>% unique())
-#   
-#   ## With networkD3, connection must be provided using id, not using
-#   ## real name like in the links dataframe.. So we need to reformat
-#   ## it.
-#   data_long$IDsource=match(data_long$source, nodes$name)-1 
-#   data_long$IDtarget=match(data_long$target, nodes$name)-1  
-#   net.p <- sankeyNetwork(Links = data_long, Nodes = nodes,
-#                          Source = "IDsource", Target = "IDtarget",
-#                          Value = "value", NodeID = "name", 
-#                          fontSize=18)
-#   ## colourScale=rainbow(
-#   ##   prod(dim(bee.nets[[i]]))))
-#   saveNetwork(net.p, sprintf("figures/sankey_%s.html",
-#                              gsub(" ", "", names(nets)[i])))
-#   webshot(sprintf("figures/sankey_%s.html",
-#                   gsub(" ", "", names(nets)[i])),
-#           file=sprintf("figures/sankey_%s.jpeg",
-#                        gsub(" ", "",
-#                             names(nets)[i])),
-#           vwidth = 650, vheight = 1400)
-#   
-# }
-# lapply(1:length(nets), makeSankeyPlot)
-```
-
-
-Extinction Curve Plot
-``` {r extinction curve}
-trial <- second.extinct(nets[["CH.2018"]], participant = "higher", method = "abun", nrep = 1000, details = FALSE)
-trial_slope <- slope.bipartite(trial, plot.it = TRUE, ylab="y")
-```
-
-Map of Sky Islands
 ``` {r sky islands map}
 # Load the country or region boundary
 world <- ne_countries(scale = "medium", returnclass = "sf")
@@ -356,68 +179,140 @@ ggplot() +
        subtitle = "Geographic distribution in the Southwestern U.S.",
        x = "Longitude", y = "Latitude")
 ```
-Precipitation map
+### Importing and Visualizing Networks
+
+A Sankey plot is a type of flow diagram that visualizes the connections between two sets of elements, often used to show weighted interactions. In this context, the Sankey plot for the CH.2012 network represents a plant-pollinator interaction network, illustrating how different pollinators interacted with various plant species in the Chiricahua Mountains site in the survey year 2012.
+``` {r import and visualize sky islands networks}
+load("../skyIslands/data/networks/Yr_PlantPollinator_Bees.RData") #yearly networks for bees
+
+# Select the specific network "CH.2012"
+example_network <- nets[["CH.2012"]]
+network_name <- "CH.2012" # Set the name explicitly for reference
+
+# Transform the network data for the Sankey plot
+data_long <- as.data.frame(example_network) %>%
+  rownames_to_column %>%
+  gather(key = 'key', value = 'value', -rowname) %>%
+  filter(value > 0)
+
+# Rename columns for clarity
+colnames(data_long) <- c("source", "target", "value")
+data_long$target <- paste(data_long$target, " ", sep = "")
+
+# Create nodes data frame for the plot
+nodes <- data.frame(name = c(as.character(data_long$source),
+                             as.character(data_long$target)) %>% unique())
+
+# Reformat the data for networkD3
+data_long$IDsource <- match(data_long$source, nodes$name) - 1
+data_long$IDtarget <- match(data_long$target, nodes$name) - 1
+
+# Generate the Sankey plot
+sankey_plot <- sankeyNetwork(Links = data_long, Nodes = nodes,
+                             Source = "IDsource", Target = "IDtarget",
+                             Value = "value", NodeID = "name",
+                             fontSize = 18)
+
+# Display the Sankey plot
+sankey_plot
+
+
+```
+
+## Methods: Data Wrangling and Summarizing
+
+### Extract Precipitation Data for Sites
+
+This code extracts precipitation data from raster files for specified years and calculates average precipitation for each study site.
+
+``` {r for loop}
+years <- c(2011, 2016, 2017, 2020, 2021)
+results_list <- list()
+
+for (year in years) {
+  # Load the raster for the year
+  raster <- rast(paste0("PRISM_precip/PRISM_ppt_stable_4kmM3_", year, "_bil.bil")) 
+  
+  # Extract precipitation values for subsites
+  precip_values <- extract(raster, sites_shp)
+  
+  # Combine extracted values with site shapefile data
+  subsite_data <- as.data.frame(sites_shp) # Convert shapefile to a data frame
+  subsite_data$Precipitation <- precip_values[, 2] # Add extracted values
+  subsite_data$Year <- year # Add the year
+  
+  # Group by Site and Year, then calculate mean precipitation
+  site_data <- subsite_data %>%
+    group_by(Site, Year) %>%
+    summarize(Mean_Precipitation = mean(Precipitation, na.rm = TRUE), .groups = "drop")
+  
+  # Store the yearly averaged data in the results list
+  results_list[[as.character(year)]] <- site_data
+}
+
+# Combine all yearly site-level results into a single data frame
+all_precip_data <- do.call(rbind, results_list)
+```
+
+### Performing Extinction Simulations and Calculating Robustness
+
+This code simulates species extinctions within plant-pollinator networks, calculates their robustness (a measure of how well the network resists species loss), and organizes the results into a data frame for analysis.
+
+```{r robustness}
+# Create an empty data frame to store the results
+robustness_results <- data.frame(Network = character(), Site = character(), Year = integer(), Robustness = numeric(), stringsAsFactors = FALSE)
+
+# Loop through each network in the list `nets`
+for (net_name in names(nets)) {
+  # Extract the network
+  network <- nets[[net_name]]
+  
+  # Run extinction simulation
+  network_ext <- second.extinct(network, participant = "higher", method = "abun", nrep = 50, details = FALSE)
+  
+  # Calculate the robustness (area under second.extinct curve)
+  network_robustness <- robustness(network_ext)
+  
+  # Extract Site and Year from the network name
+  site_year <- unlist(strsplit(net_name, "\\.")) # Split by "."
+  site <- site_year[1]
+  year <- as.integer(site_year[2])
+  
+  # Append the results to the data frame
+  robustness_results <- rbind(robustness_results, data.frame(Network = net_name, Site = site, Year = year, Robustness = network_robustness))
+}
+
+# Print the resulting data frame
+print(robustness_results)
+
+```
+
+### Extinction Curve Plot
+
+This plot demonstrates an extinction cascade sequence derived from the use of the second.extinct function. Robustness of the networks is defined as the area under the curve.
+``` {r extinction curve}
+trial <- second.extinct(nets[["CH.2018"]], participant = "higher", method = "abun", nrep = 1000, details = FALSE)
+trial_slope <- slope.bipartite(trial, plot.it = TRUE, ylab="y")
+```
+
+### Merge Precipitation Data with Robustness Results
+
+This code merges the precipitation data (all_precip_data) with the robustness results (robustness_results) and performs some data cleaning steps. The precipitation data (all_precip_data) represents the year in which the precipitation was measured, but the robustness data (robustness_results) represents the following year (because the year of the network data in robustness_results corresponds to the year after the precipitation data). So, adding 1 to the Year of the precipitation data aligns it with the corresponding year in the robustness data, ensuring the years match when the data is merged. The final line filters out rows from final_data since the sites ("SS", "UK", or "VC") were surveyed less than the others, and are problematic for the analysis.
+
+``` {r merge precip with robustness}
+# Add one year to the precipitation year to align with robustness data
+all_precip_data <- all_precip_data %>%
+  mutate(Year = Year + 1) 
+
+final_data <- merge(robustness_results, all_precip_data, by = c("Site", "Year"))
+final_data <- final_data %>%
+  filter(!Site %in% c("SS", "UK", "VC"))
+```
+
+### Precipitation map
+
+This code produces a faceted map that displays the spatial distribution of summer precipitation for the years 2011, 2016, 2017, 2020, and 2021. Each map in the facet corresponds to one year. The precipitation values are log-transformed to handle potential zero values and make the differences more visually interpretable. The map also includes the locations of study sites overlaid on the precipitation data. The color scale represents the log-transformed precipitation values, helping to highlight variations in precipitation across the region and over time.
 ``` {r precip map}
-# # Define a list of the rasters
-# rasters <- list(
-#   precip_2011 = precip_2011_raster,
-#   precip_2016 = precip_2016_raster,
-#   precip_2017 = precip_2017_raster,
-#   precip_2020 = precip_2020_raster,
-#   precip_2021 = precip_2021_raster
-# )
-# 
-# # Define a list of corresponding years for labeling
-# years <- c("2011", "2016", "2017", "2020", "2021")
-# 
-# # Calculate global minimum and maximum precipitation values across all rasters
-# min_precip <- min(sapply(rasters, function(r) min(values(r), na.rm = TRUE)))
-# max_precip <- max(sapply(rasters, function(r) max(values(r), na.rm = TRUE)))
-# 
-# # Loop through each raster and create a plot for each year
-# for (i in 1:length(rasters)) {
-#   
-#   # Get the current raster and year
-#   current_raster <- rasters[[i]]
-#   current_year <- years[i]
-#   
-#   # Convert the current raster to a data.frame for ggplot
-#   precip_df <- as.data.frame(current_raster, xy = TRUE, na.rm = TRUE)
-#   
-#   # Rename the third column to "precip"
-#   colnames(precip_df)[3] <- "precip"
-#   
-#   # Apply log transformation to precipitation values (log(x + 1) to avoid log(0))
-#   precip_df$precip_log <- log(precip_df$precip + 1)
-#   
-#   # Create the plot for the current year
-#   plot <- ggplot() +
-#     # Add the precipitation raster layer
-#     geom_raster(data = precip_df, aes(x = x, y = y, fill = precip_log)) +
-#     
-#     # Add a color scale for the precipitation
-#    scale_fill_viridis(option = "D", name = paste("Precipitation", year, "(log scale)"), direction = 1, 
-#                       limits = c(log(min_precip + 1), log(max_precip + 1))) +
-#     
-#     # Add the site locations
-#     geom_sf(data = sites, color = "red", size = 3, shape = 21, fill = "yellow") +
-#     
-#     # Customize map extent (adjust as needed)
-#     coord_sf(xlim = c(-111, -105), ylim = c(31, 37), expand = FALSE) +
-#     
-#     # Customize the appearance
-#     theme_minimal() +
-#     labs(
-#       title = paste("Sky Island Sites and Precipitation in", current_year, "(log-transformed)"),
-#       subtitle = paste("Precipitation layer for the year", current_year),
-#       x = "Longitude", 
-#       y = "Latitude"
-#     ) +
-#     theme(legend.position = "right")
-#   
-#   # Print the plot for the current year
-#   print(plot)
-# }
 
 # Define a list of the rasters
 rasters <- list(
@@ -464,6 +359,9 @@ for (i in 1:length(rasters)) {
 # Combine all the data into a single data frame
 plot_data_df <- do.call(rbind, plot_data)
 
+# Convert SpatVector to sf object
+sites <- st_as_sf(sites_shp)
+
 # Create the plot with facet wrap
 plot <- ggplot(plot_data_df) +
   # Add the precipitation raster layer
@@ -502,3 +400,70 @@ print(plot)
 
 
 ```
+
+
+## Results
+
+### Fit a Linear Mixed-effects Model
+
+The model investigates the relationship between network robustness (the response variable) and two fixed effects:
+
+Mean Precipitation (in mm, representing moisture availability from the previous year).
+Year (temporal factor, representing the year of data collection).
+It also accounts for site-specific variability as a random effect (intercept for "Site"), which allows the model to control for differences between sites while focusing on the broader relationships.
+``` {r model}
+model <- lmer(Robustness ~ Mean_Precipitation + Year + (1 | Site), data = final_data)
+
+summary(model)
+```
+
+### Robustness by Site: Scatterplot with regression line to display the relationship between precipitation and network robustness.
+
+To visualize the relationship between mean precipitation and network robustness across different sites and years, this code generates a scatterplot with a regression line where:
+Mean precipitation is plotted on the x-axis and network robustness on the y-axis.
+Points are colored by site and shaped by year.
+A regression line is added to show the relationship between precipitation and robustness, and the slope and p-value of this relationship are annotated on the plot.
+The plot provides insight into the relationship between precipitation and network robustness while accounting for differences across sites and years.
+``` {r visualization}
+ggplot(final_data, aes(x = Mean_Precipitation, y = Robustness, color = Site, shape = as.factor(Year))) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = FALSE, aes(group = 1), color = "black", linetype = "dashed") +
+  labs(
+    title = "Network Robustness by Precipitation and Site",
+    subtitle = "Mixed-effects model: small site-level variance, negative trend with precipitation",
+    x = "Mean Precipitation (previous year) (mm)",
+    y = "Network Robustness",
+    color = "Site",
+    shape = "Year"
+  ) +
+  annotate("text", x = 500, y = 0.2, label = "Slope = -0.00028\nSite variance = 0.0052\np-value = 0.086", size = 4, color = "blue") +
+  theme_minimal()
+```
+
+## Discussion and Conclusion
+
+From the model results, mean precipitation was negatively correlated with network robustness, though this effect was not statistically significant (p > 0.05). The fixed effect estimate for mean precipitation (-0.00026) indicates a slight negative trend, which contrasts with my initial hypothesis. The non-significance of this relationship, with a t-value of -1.670, suggests that the influence of precipitation on robustness may be weaker or more context-dependent than expected. This discrepancy could result from the small sample size, site-specific interactions, or unmeasured confounding factors that moderate the relationship between precipitation and robustness.
+
+Year did not exhibit a significant effect on robustness, as reflected in its low estimate (-0.0063) and t-value (-0.867). This lack of temporal variation suggests that, within the studied time frame, other environmental or ecological drivers, rather than temporal shifts alone, are more critical in influencing network stability. Additionally, the relatively small variance attributed to the site-specific random effect (variance = 0.0058) implies that while site-to-site variability exists, it accounts for only a modest portion of the overall variation in robustness. The larger residual variance (0.0181) underscores the potential role of other unmeasured factors in shaping network robustness.
+
+Despite these complexities, the abundance-driven extinction order provided insight into the structural dynamics of these networks. Common species—those with the highest interaction frequencies—play a disproportionately critical role in maintaining network stability. The loss of these abundant species resulted in pronounced declines in robustness, emphasizing their foundational role in supporting the overall resilience of ecological networks. This finding aligns with theoretical and empirical studies, highlighting that abundant species with numerous interactions often serve as keystone elements in ecological systems.
+
+In conclusion, while the influence of precipitation on network robustness appears to be complex and less pronounced than I initially hypothesized, the findings underscore the need for future research to disentangle these dynamics further. Expanding the model to include a larger number of sites, more years, and additional environmental variables, such as temperature, habitat diversity, and resource phenology, could illuminate the multifaceted drivers of network stability.
+
+Limitations and Next Steps:
+Abundance as the sole extinction order may overlook functional and fitness roles in network dynamics.
+Climate data resolution could be improved to capture microclimatic variations.
+
+References:
+Brusca, R. C., Wiens, J. F., Meyer, W. M., Eble, J., Franklin, K., Overpeck, J. T. & Moore, W., 2013
+Dramatic response to climate change in the southwest: Robert whittaker's 1963 arizona mountain
+plant transect revisited. Ecology and evolution 3, 3307-3319.
+
+Dunne, J. A., Williams, R. J. & Martinez, N. D. Network structure and biodiversity loss in food webs: robustness increases with connectance. Ecology Letters 5, 558–567 (2002).
+
+Kaiser-Bunbury, C. N., Muff, S., Memmott, J., Müller, C. B. & Caflisch, A. The robustness of pollination networks to the loss of species and interactions: a quantitative approach incorporating pollinator behaviour. Ecology Letters 13, 442–452 (2010).
+
+Memmott, J., Waser, N. M. & Price, M. V. Tolerance of Pollination Networks to Species Extinctions. Proceedings: Biological Sciences 271, 2605–2611 (2004).
+
+Urban, M. C. Accelerating extinction risk from climate change. Science 348, 571–573 (2015).
+
