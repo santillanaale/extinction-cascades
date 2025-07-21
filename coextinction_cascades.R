@@ -218,119 +218,184 @@ all_precip_data <- do.call(rbind, results_list)
 ## ---- TCM Topological Coextinction Model ----
 
 ### ----  Increasing abundance  ----
-# Create an empty data frame to store the results
-TCM_increasing_abundance_robustness_results <- data.frame(Network = character(), Site = character(), Year = integer(), Robustness = numeric(), stringsAsFactors = FALSE)
-
-# Loop through each network in the list `nets`
-for (net_name in names(nets)) {
-  # Extract the network
-  network <- nets[[net_name]]
-  
-  # Run extinction simulation
-  network_ext <- second.extinct(network, participant = "higher", method = "abun", nrep = 50, details = FALSE)
-  
-  # Calculate the robustness (area under second.extinct curve)
-  network_robustness <- robustness(network_ext)
-  
-  # Extract Site and Year from the network name
-  site_year <- unlist(strsplit(net_name, "\\.")) # Split by "."
-  site <- site_year[1]
-  year <- as.integer(site_year[2])
-  
-  # Append the results to the data frame
-  TCM_increasing_abundance_robustness_results <- rbind(TCM_increasing_abundance_robustness_results, data.frame(Network = net_name, Site = site, Year = year, Robustness = network_robustness))
-}
-
-# Print the resulting data frame
-print(TCM_increasing_abundance_robustness_results)
-
+# # Create an empty data frame to store the results
+# TCM_increasing_abundance_robustness_results <- data.frame(Network = character(), Site = character(), Year = integer(), Robustness = numeric(), stringsAsFactors = FALSE)
+# 
+# # Loop through each network in the list `nets`
+# for (net_name in names(nets)) {
+#   # Extract the network
+#   network <- nets[[net_name]]
+#   
+#   # Run extinction simulation
+#   network_ext <- second.extinct(network, participant = "higher", method = "abun", nrep = 50, details = FALSE)
+#   
+#   # Calculate the robustness (area under second.extinct curve)
+#   network_robustness <- robustness(network_ext)
+#   
+#   # Extract Site and Year from the network name
+#   site_year <- unlist(strsplit(net_name, "\\.")) # Split by "."
+#   site <- site_year[1]
+#   year <- as.integer(site_year[2])
+#   
+#   # Append the results to the data frame
+#   TCM_increasing_abundance_robustness_results <- rbind(TCM_increasing_abundance_robustness_results, data.frame(Network = net_name, Site = site, Year = year, Robustness = network_robustness))
+# }
+# 
+# # Print the resulting data frame
+# print(TCM_increasing_abundance_robustness_results)
+# 
 ### ----  Decreasing abundance  ----
-# Create an empty data frame to store the results
-TCM_decreasing_abundance_robustness_results <- data.frame(Network = character(), Site = character(), Year = integer(), Robustness = numeric(), stringsAsFactors = FALSE)
+# # Create an empty data frame to store the results
+# TCM_decreasing_abundance_robustness_results <- data.frame(Network = character(), Site = character(), Year = integer(), Robustness = numeric(), stringsAsFactors = FALSE)
+# 
+# source("modified_extinction.R")
+# source("modified_second_extinct.R")
+# 
+# # Sanity Check
+# modified.second.extinct(web = example_network, participant = "higher", method = "abundance", reverse = TRUE,     # 👈 removes most abundant species instead of least
+#   nrep = 1, details = FALSE)
+# 
+# # Loop through each network in the list `nets`
+# for (net_name in names(nets)) {
+#   # Extract the network
+#   network <- nets[[net_name]]
+# 
+#   # Run extinction simulation
+#   network_ext <- modified.second.extinct(network, participant = "higher", method = "abun", reverse = TRUE, nrep = 50, details = FALSE)
+# 
+#   # Calculate the robustness (area under second.extinct curve)
+#   network_robustness <- robustness(network_ext)
+# 
+#   # Extract Site and Year from the network name
+#   site_year <- unlist(strsplit(net_name, "\\.")) # Split by "."
+#   site <- site_year[1]
+#   year <- as.integer(site_year[2])
+# 
+#   # Append the results to the data frame
+#   TCM_decreasing_abundance_robustness_results <- rbind(TCM_decreasing_abundance_robustness_results, data.frame(Network = net_name, Site = site, Year = year, Robustness = network_robustness))
+# }
+# 
+# # Print the resulting data frame
+# print(TCM_decreasing_abundance_robustness_results)
+# 
+### ----  Decreasing Degree  ----
+# # Create an empty data frame to store the results
+# TCM_decreasing_degree_robustness_results <- data.frame(Network = character(), Site = character(), Year = integer(), Robustness = numeric(), stringsAsFactors = FALSE)
+# 
+# # Loop through each network in the list `nets`
+# for (net_name in names(nets)) {
+#   # Extract the network
+#   network <- nets[[net_name]]
+#   
+#   # Run extinction simulation
+#   network_ext <- second.extinct(network, participant = "higher", method = "degree", nrep = 50, details = FALSE)
+#   
+#   # Calculate the robustness (area under second.extinct curve)
+#   network_robustness <- robustness(network_ext)
+#   
+#   # Extract Site and Year from the network name
+#   site_year <- unlist(strsplit(net_name, "\\.")) # Split by "."
+#   site <- site_year[1]
+#   year <- as.integer(site_year[2])
+#   
+#   # Append the results to the data frame
+#   TCM_decreasing_degree_robustness_results <- rbind(TCM_decreasing_degree_robustness_results, data.frame(Network = net_name, Site = site, Year = year, Robustness = network_robustness))
+# }
+# 
+# # Print the resulting data frame
+# print(TCM_decreasing_degree_robustness_results)
+# 
+### ----  Increasing Degree  ----
+# # Create an empty data frame to store the results
+# TCM_increasing_degree_robustness_results <- data.frame(Network = character(), Site = character(), Year = integer(), Robustness = numeric(), stringsAsFactors = FALSE)
+# 
+# # Loop through each network in the list `nets`
+# for (net_name in names(nets)) {
+#   # Extract the network
+#   network <- nets[[net_name]]
+#   
+#   # Run extinction simulation
+#   network_ext <- modified.second.extinct(network, participant = "higher", method = "degree", reverse = TRUE, nrep = 50, details = FALSE)
+#   
+#   # Calculate the robustness (area under second.extinct curve)
+#   network_robustness <- robustness(network_ext)
+#   
+#   # Extract Site and Year from the network name
+#   site_year <- unlist(strsplit(net_name, "\\.")) # Split by "."
+#   site <- site_year[1]
+#   year <- as.integer(site_year[2])
+#   
+#   # Append the results to the data frame
+#   TCM_increasing_degree_robustness_results <- rbind(TCM_increasing_degree_robustness_results, data.frame(Network = net_name, Site = site, Year = year, Robustness = network_robustness))
+# }
+# 
+# # Print the resulting data frame
+# print(TCM_decreasing_abundance_robustness_results)
 
+### ---- TCM: Combining all scenarios into one loop ----
+
+# Load modified extinction functions
 source("modified_extinction.R")
 source("modified_second_extinct.R")
 
-# Sanity Check
-modified.second.extinct(web = example_network, participant = "higher", method = "abundance", reverse = TRUE,     # 👈 removes most abundant species instead of least
-  nrep = 1, details = FALSE)
+# Use only modified.second.extinct
+scenarios <- list(
+  abun = list(method = "abun", reverse = FALSE),
+  abun_reverse = list(method = "abun", reverse = TRUE),
+  degree = list(method = "degree", reverse = FALSE),
+  degree_reverse = list(method = "degree", reverse = TRUE)
+)
 
-# Loop through each network in the list `nets`
-for (net_name in names(nets)) {
-  # Extract the network
-  network <- nets[[net_name]]
 
-  # Run extinction simulation
-  network_ext <- modified.second.extinct(network, participant = "higher", method = "abun", reverse = TRUE, nrep = 50, details = FALSE)
-
-  # Calculate the robustness (area under second.extinct curve)
-  network_robustness <- robustness(network_ext)
-
-  # Extract Site and Year from the network name
-  site_year <- unlist(strsplit(net_name, "\\.")) # Split by "."
-  site <- site_year[1]
-  year <- as.integer(site_year[2])
-
-  # Append the results to the data frame
-  TCM_decreasing_abundance_robustness_results <- rbind(decreasing_abundance_robustness_results, data.frame(Network = net_name, Site = site, Year = year, Robustness = network_robustness))
+for (scenario_name in names(scenarios)) {
+  scenario <- scenarios[[scenario_name]]
+  
+  results_list <- list()
+  
+  for (net_name in names(nets)) {
+    network <- nets[[net_name]]
+    
+    # Run extinction simulation using modified function for all
+    ext_result <- modified.second.extinct(
+      web = network,
+      participant = "higher",
+      method = scenario$method,
+      reverse = scenario$reverse,
+      nrep = 50,
+      details = FALSE
+    )
+    
+    rob <- robustness(ext_result)
+    
+    site_year <- unlist(strsplit(net_name, "\\."))
+    site <- site_year[1]
+    year <- as.integer(site_year[2])
+    
+    results_list[[net_name]] <- data.frame(
+      Network = net_name,
+      Site = site,
+      Year = year,
+      Robustness = rob,
+      stringsAsFactors = FALSE
+    )
+  }
+  
+  scenario_df <- do.call(rbind, results_list)
+  
+  # Save results
+  save_path <- sprintf("robustness_metrics/%s_robustness_metrics.Rdata", scenario_name)
+  save(scenario_df, file = save_path)
+  
+  assign(paste0("TCM_", scenario_name, "_robustness_results"), scenario_df)
+  print(scenario_df)
 }
 
-# Print the resulting data frame
-print(TCM_decreasing_abundance_robustness_results)
 
-### ----  Decreasing Degree  ----
-# Create an empty data frame to store the results
-TCM_decreasing_degree_robustness_results <- data.frame(Network = character(), Site = character(), Year = integer(), Robustness = numeric(), stringsAsFactors = FALSE)
 
-# Loop through each network in the list `nets`
-for (net_name in names(nets)) {
-  # Extract the network
-  network <- nets[[net_name]]
-  
-  # Run extinction simulation
-  network_ext <- second.extinct(network, participant = "higher", method = "degree", nrep = 50, details = FALSE)
-  
-  # Calculate the robustness (area under second.extinct curve)
-  network_robustness <- robustness(network_ext)
-  
-  # Extract Site and Year from the network name
-  site_year <- unlist(strsplit(net_name, "\\.")) # Split by "."
-  site <- site_year[1]
-  year <- as.integer(site_year[2])
-  
-  # Append the results to the data frame
-  TCM_decreasing_degree_robustness_results <- rbind(TCM_decreasing_degree_robustness_results, data.frame(Network = net_name, Site = site, Year = year, Robustness = network_robustness))
-}
 
-# Print the resulting data frame
-print(TCM_decreasing_degree_robustness_results)
 
-### ----  Increasing Degree  ----
-# Create an empty data frame to store the results
-TCM_increasing_degree_robustness_results <- data.frame(Network = character(), Site = character(), Year = integer(), Robustness = numeric(), stringsAsFactors = FALSE)
 
-# Loop through each network in the list `nets`
-for (net_name in names(nets)) {
-  # Extract the network
-  network <- nets[[net_name]]
-  
-  # Run extinction simulation
-  network_ext <- modified.second.extinct(network, participant = "higher", method = "degree", reverse = TRUE, nrep = 50, details = FALSE)
-  
-  # Calculate the robustness (area under second.extinct curve)
-  network_robustness <- robustness(network_ext)
-  
-  # Extract Site and Year from the network name
-  site_year <- unlist(strsplit(net_name, "\\.")) # Split by "."
-  site <- site_year[1]
-  year <- as.integer(site_year[2])
-  
-  # Append the results to the data frame
-  TCM_increasing_degree_robustness_results <- rbind(TCM_increasing_degree_robustness_results, data.frame(Network = net_name, Site = site, Year = year, Robustness = network_robustness))
-}
 
-# Print the resulting data frame
-print(TCM_decreasing_abundance_robustness_results)
 
 ## ---- SCM: Stochastic Coextinction Model ----
 
