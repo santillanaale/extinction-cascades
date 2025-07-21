@@ -1,0 +1,12 @@
+	Orthorhyncus_cristatus	Eulampis_holosericeus
+cordia_bullata	251	0
+turnera_ulmifoli	39	0
+morinda_citrifolia	246	383
+tabebuia_heterophylla	0	19
+tecoma_stans	0	2
+erithalis_fruticosa	7	0
+tephrosia_noctiflora	71	0
+citharexylum_spinosum	215	0
+stachytarpheta_jamaicensis	14	0
+lonchocarpus_benthamianus	27	16
+leonotis_nepetifolia	3	55

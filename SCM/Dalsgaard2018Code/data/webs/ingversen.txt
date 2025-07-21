@@ -1,0 +1,7 @@
+	Trochilus_p_polytmus	Mellisuga_minima
+dendropanax_arboreus	11	12
+rubiaceae_sp1	6	3
+byrsonima_sp	0	1
+bignoniaceae_sp	1	0
+rubiaceae_sp2	1	0
+aechmea_paniculiger	1	0

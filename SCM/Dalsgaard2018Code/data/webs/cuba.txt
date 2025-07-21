@@ -1,0 +1,9 @@
+	Chlorostilbon_ricordii	Mellisuga_helenae
+albizia_saman	5	3
+antigonon_leptopus	63	15
+clerodendrum_aculeatum	21	1
+guazuma_ulmifolia	3	0
+lysiloma_latisiliquum	8	0
+pentalinon_luteum	6	0
+tabernaemontana_alba	1	1
+turnera_ulmifolia	6	0

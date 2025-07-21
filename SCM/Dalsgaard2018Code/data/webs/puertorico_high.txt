@@ -1,0 +1,12 @@
+	Anthracothorax_viridis	Chlorostilbon_maugaeaus
+acinodendron_sintenisii	0	19
+cestrum_macrophyllum	0	5
+guzmania_berteroniana	18	1
+impatiens_walleriana	0	1
+neorudolphia_volubilis	2	0
+palicourea_crocea	36	111
+psychotria_berteroana	0	45
+renealmia_alpinia	0	1
+schlegelia_brachyantha	0	1
+schradera_exotica	0	5
+urena_lobata	0	1

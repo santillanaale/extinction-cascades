@@ -1,0 +1,8 @@
+	Orthorhyncus_cristatus	Eulampis_holosericeus
+psychotria_capitata	34	0
+stachytarpheta_urticifoli	584	34
+lobelia_cirsiifolia	9	0
+scrophulariaceae_sp	3	4
+charianthus_grenadensis	27	14
+gonzalagunia_hirsuta	3	0
+schradera_exotica	46	0

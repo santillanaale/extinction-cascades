@@ -1,0 +1,6 @@
+	Anthracothorax_dominicus	Chlorostilbon_maugaeaus
+pentalinon_luteum	21	0
+pilosocereus_royenii	14	0
+melocactus_intortus	2	0
+consolea_rubescens	111	5
+tabebuia_heterophylla	12	0
