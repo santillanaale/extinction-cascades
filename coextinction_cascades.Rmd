@@ -183,7 +183,7 @@ ggplot() +
 
 A Sankey plot is a type of flow diagram that visualizes the connections between two sets of elements, often used to show weighted interactions. In this context, the Sankey plot for the CH.2012 network represents a plant-pollinator interaction network, illustrating how different pollinators interacted with various plant species in the Chiricahua Mountains site in the survey year 2012.
 ``` {r import and visualize sky islands networks}
-load("../skyIslands/data/networks/Yr_PlantPollinator_Bees.RData") #yearly networks for bees
+load("../skyIslands/data/networks/Year_PlantPollinator_Bees.RData") #yearly networks for bees
 
 # Select the specific network "CH.2012"
 example_network <- nets[["CH.2012"]]
