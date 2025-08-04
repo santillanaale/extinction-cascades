@@ -1,4 +1,5 @@
 rm(list=ls())
+setwd("C:/Users/ale_s/University of Oregon Dropbox/Alejandro Santillana Fernandez/extinction-cascades")
 library(bipartite)
 library(fossil)
 library(tidyverse)
@@ -14,93 +15,49 @@ library(sf)
 library(viridis)
 library(webshot)
 
-# ---- Import Precipitation Rasters ----
-### Import monthly precipitation data for each field season ###
+# ---- Load Networks ----
+load("../skyIslands/data/networks/Year_PlantPollinator_Bees.RData") #yearly networks for bees
 
-precip_2011_06_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201106_bil.bil")
-precip_2011_07_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201107_bil.bil")
-precip_2011_08_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201108_bil.bil")
-precip_2011_09_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201109_bil.bil")
+# ---- Import and Visualize (Sankey) Networks ----
 
-precip_2016_06_raster <- rast("PRISM_summer_precip/2016/PRISM_ppt_stable_4kmM3_201606_bil.bil")
-precip_2016_07_raster <- rast("PRISM_summer_precip/2016/PRISM_ppt_stable_4kmM3_201607_bil.bil")
-precip_2016_08_raster <- rast("PRISM_summer_precip/2016/PRISM_ppt_stable_4kmM3_201608_bil.bil")
-precip_2016_09_raster <- rast("PRISM_summer_precip/2016/PRISM_ppt_stable_4kmM3_201609_bil.bil")
+# Select the specific network "CH.2012"
+example_network <- nets[["CH.2012"]]
+network_name <- "CH.2012" # Set the name explicitly for reference
 
-precip_2017_06_raster <- rast("PRISM_summer_precip/2017/PRISM_ppt_stable_4kmM3_201706_bil.bil")
-precip_2017_07_raster <- rast("PRISM_summer_precip/2017/PRISM_ppt_stable_4kmM3_201707_bil.bil")
-precip_2017_08_raster <- rast("PRISM_summer_precip/2017/PRISM_ppt_stable_4kmM3_201708_bil.bil")
-precip_2017_09_raster <- rast("PRISM_summer_precip/2017/PRISM_ppt_stable_4kmM3_201709_bil.bil")
+# Transform the network data for the Sankey plot
+data_long <- as.data.frame(example_network) %>%
+  rownames_to_column %>%
+  gather(key = 'key', value = 'value', -rowname) %>%
+  filter(value > 0)
 
-precip_2020_06_raster <- rast("PRISM_summer_precip/2020/PRISM_ppt_stable_4kmM3_202006_bil.bil")
-precip_2020_07_raster <- rast("PRISM_summer_precip/2020/PRISM_ppt_stable_4kmM3_202007_bil.bil")
-precip_2020_08_raster <- rast("PRISM_summer_precip/2020/PRISM_ppt_stable_4kmM3_202008_bil.bil")
-precip_2020_09_raster <- rast("PRISM_summer_precip/2020/PRISM_ppt_stable_4kmM3_202009_bil.bil")
+# Rename columns for clarity
+colnames(data_long) <- c("source", "target", "value")
+data_long$target <- paste(data_long$target, " ", sep = "")
 
-precip_2021_06_raster <- rast("PRISM_summer_precip/2021/PRISM_ppt_stable_4kmM3_202106_bil.bil")
-precip_2021_07_raster <- rast("PRISM_summer_precip/2021/PRISM_ppt_stable_4kmM3_202107_bil.bil")
-precip_2021_08_raster <- rast("PRISM_summer_precip/2021/PRISM_ppt_stable_4kmM3_202108_bil.bil")
-precip_2021_09_raster <- rast("PRISM_summer_precip/2021/PRISM_ppt_stable_4kmM3_202109_bil.bil")
+# Create nodes data frame for the plot
+nodes <- data.frame(name = c(as.character(data_long$source),
+                             as.character(data_long$target)) %>% unique())
 
-# Define the years and file paths
-years <- c("2011", "2016", "2017", "2020", "2021")
-months <- c("06", "07", "08", "09")
-base_path <- "PRISM_summer_precip"
+# Reformat the data for networkD3
+data_long$IDsource <- match(data_long$source, nodes$name) - 1
+data_long$IDtarget <- match(data_long$target, nodes$name) - 1
 
-# Initialize a list to store the summed rasters for each year
-summer_rasters <- list()
+# Generate the Sankey plot
+sankey_plot <- sankeyNetwork(Links = data_long, Nodes = nodes,
+                             Source = "IDsource", Target = "IDtarget",
+                             Value = "value", NodeID = "name",
+                             fontSize = 18)
 
-# Loop through each year
-for (year in years) {
-  
-  # Initialize an empty list to hold monthly rasters
-  monthly_rasters <- list()
-  
-  # Loop through each month
-  for (month in months) {
-    # Construct the file path
-    file_path <- file.path(base_path, year, paste0("PRISM_ppt_stable_4kmM3_", year, month, "_bil.bil"))
-    
-    # Load the raster and append to the list
-    monthly_rasters[[month]] <- rast(file_path)
-  }
-  
-  # Stack and sum the monthly rasters
-  stacked_rasters <- rast(monthly_rasters)
-  summer_raster <- sum(stacked_rasters, na.rm = TRUE)
-  
-  # Save the raster to the list
-  summer_rasters[[year]] <- summer_raster
-  
-  
-  # Print a message for progress tracking
-  print(paste("Processed year:", year))
-}
+# Display the Sankey plot
+sankey_plot
 
-precip_2011_raster <- summer_rasters[["2011"]]
-precip_2016_raster <- summer_rasters[["2016"]]
-precip_2017_raster <- summer_rasters[["2017"]]
-precip_2020_raster <- summer_rasters[["2020"]]
-precip_2021_raster <- summer_rasters[["2021"]]
+# ---- Import Site Shapefile ----
 
-# Identify variables with the pattern "precip_****_**_raster"
-monthly_rasters <- ls(pattern = "^precip_\\d{4}_\\d{2}_raster$")
-rm(list = monthly_rasters)
-
-
-# ---- Import and Transform Spatial Data ----
-
-#The following script imports a shapefile for study sites, ensuring consistency in coordinate reference systems (CRS) with PRISM rasters.
+#The following script imports a shapefile for study sites.
 sites_shp <- vect("Sites/sites.shp")
-print(crs(sites_shp))
-print(crs(precip_2011_raster))
-sites_shp <- project(sites_shp, crs(precip_2011_raster))
-
-
 
 # ---- Geospatial Visualization ----
-
-#Sky Islands Map
+## ---- Sky Islands Map ----
 #The map contextualizes the geographic positioning of the Sky Islands, a biodiversity hotspot spanning the southwestern U.S. and northern Mexico. Sites sampled are in the states of New Mexico and Arizona.
 # Load the country or region boundary
 world <- ne_countries(scale = "medium", returnclass = "sf")
@@ -140,73 +97,335 @@ ggplot() +
        x = "Longitude", y = "Latitude")
 
 
+# ---- Precipitation Data ----
 
-# ---- Import and Visualize (Sankey) Networks ----
+## ---- Import Monsoonal and Winter Rasters ----
+### Import monthly precipitation data for each field season ###
 
-# A Sankey plot is a type of flow diagram that visualizes the connections between two sets of elements, often used to show weighted interactions. In this context, the Sankey plot for the CH.2012 network represents a plant-pollinator interaction network, illustrating how different pollinators interacted with various plant species in the Chiricahua Mountains site in the survey year 2012.
-load("../skyIslands/data/networks/Year_PlantPollinator_Bees.RData") #yearly networks for bees
+### ---- Antecedent Year Monsoon Precipitation ----
+# precip_2011_06_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201106_bil.bil")
+precip_2011_07_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201107_bil.bil")
+precip_2011_08_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201108_bil.bil")
+precip_2011_09_raster <- rast("PRISM_summer_precip/2011/PRISM_ppt_stable_4kmM3_201109_bil.bil")
 
-# Select the specific network "CH.2012"
-example_network <- nets[["CH.2012"]]
-network_name <- "CH.2012" # Set the name explicitly for reference
+# precip_2016_06_raster <- rast("PRISM_summer_precip/2016/PRISM_ppt_stable_4kmM3_201606_bil.bil")
+precip_2016_07_raster <- rast("PRISM_summer_precip/2016/PRISM_ppt_stable_4kmM3_201607_bil.bil")
+precip_2016_08_raster <- rast("PRISM_summer_precip/2016/PRISM_ppt_stable_4kmM3_201608_bil.bil")
+precip_2016_09_raster <- rast("PRISM_summer_precip/2016/PRISM_ppt_stable_4kmM3_201609_bil.bil")
 
-# Transform the network data for the Sankey plot
-data_long <- as.data.frame(example_network) %>%
-  rownames_to_column %>%
-  gather(key = 'key', value = 'value', -rowname) %>%
-  filter(value > 0)
+# precip_2017_06_raster <- rast("PRISM_summer_precip/2017/PRISM_ppt_stable_4kmM3_201706_bil.bil")
+precip_2017_07_raster <- rast("PRISM_summer_precip/2017/PRISM_ppt_stable_4kmM3_201707_bil.bil")
+precip_2017_08_raster <- rast("PRISM_summer_precip/2017/PRISM_ppt_stable_4kmM3_201708_bil.bil")
+precip_2017_09_raster <- rast("PRISM_summer_precip/2017/PRISM_ppt_stable_4kmM3_201709_bil.bil")
 
-# Rename columns for clarity
-colnames(data_long) <- c("source", "target", "value")
-data_long$target <- paste(data_long$target, " ", sep = "")
+# precip_2020_06_raster <- rast("PRISM_summer_precip/2020/PRISM_ppt_stable_4kmM3_202006_bil.bil")
+precip_2020_07_raster <- rast("PRISM_summer_precip/2020/PRISM_ppt_stable_4kmM3_202007_bil.bil")
+precip_2020_08_raster <- rast("PRISM_summer_precip/2020/PRISM_ppt_stable_4kmM3_202008_bil.bil")
+precip_2020_09_raster <- rast("PRISM_summer_precip/2020/PRISM_ppt_stable_4kmM3_202009_bil.bil")
 
-# Create nodes data frame for the plot
-nodes <- data.frame(name = c(as.character(data_long$source),
-                             as.character(data_long$target)) %>% unique())
+# precip_2021_06_raster <- rast("PRISM_summer_precip/2021/PRISM_ppt_stable_4kmM3_202106_bil.bil")
+precip_2021_07_raster <- rast("PRISM_summer_precip/2021/PRISM_ppt_stable_4kmM3_202107_bil.bil")
+precip_2021_08_raster <- rast("PRISM_summer_precip/2021/PRISM_ppt_stable_4kmM3_202108_bil.bil")
+precip_2021_09_raster <- rast("PRISM_summer_precip/2021/PRISM_ppt_stable_4kmM3_202109_bil.bil")
 
-# Reformat the data for networkD3
-data_long$IDsource <- match(data_long$source, nodes$name) - 1
-data_long$IDtarget <- match(data_long$target, nodes$name) - 1
+# Define the years and file paths
+years <- c("2011", "2016", "2017", "2020", "2021")
+months <- c("07", "08", "09")
+base_path <- "PRISM_summer_precip"
 
-# Generate the Sankey plot
-sankey_plot <- sankeyNetwork(Links = data_long, Nodes = nodes,
-                             Source = "IDsource", Target = "IDtarget",
-                             Value = "value", NodeID = "name",
-                             fontSize = 18)
+# Initialize a list to store the summed rasters for each year
+summer_rasters <- list()
 
-# Display the Sankey plot
-sankey_plot
-
-
-# ---- Extract Precipitation Data for Sites ----
-
-# This code extracts precipitation data from raster files for specified years and calculates average precipitation for each study site.
-years <- c(2011, 2016, 2017, 2020, 2021)
-results_list <- list()
-
+# Loop through each year
 for (year in years) {
-  # Load the raster for the year
-  raster <- rast(paste0("PRISM_precip/PRISM_ppt_stable_4kmM3_", year, "_bil.bil")) 
   
-  # Extract precipitation values for subsites
-  precip_values <- extract(raster, sites_shp)
+  # Initialize an empty list to hold monthly rasters
+  monthly_rasters <- list()
   
-  # Combine extracted values with site shapefile data
-  subsite_data <- as.data.frame(sites_shp) # Convert shapefile to a data frame
-  subsite_data$Precipitation <- precip_values[, 2] # Add extracted values
-  subsite_data$Year <- year # Add the year
+  # Loop through each month
+  for (month in months) {
+    # Construct the file path
+    file_path <- file.path(base_path, year, paste0("PRISM_ppt_stable_4kmM3_", year, month, "_bil.bil"))
+    
+    # Load the raster and append to the list
+    monthly_rasters[[month]] <- rast(file_path)
+  }
   
-  # Group by Site and Year, then calculate mean precipitation
-  site_data <- subsite_data %>%
-    group_by(Site, Year) %>%
-    summarize(Mean_Precipitation = mean(Precipitation, na.rm = TRUE), .groups = "drop")
+  # Stack and sum the monthly rasters
+  stacked_rasters <- rast(monthly_rasters)
+  summer_raster <- sum(stacked_rasters, na.rm = TRUE)
   
-  # Store the yearly averaged data in the results list
-  results_list[[as.character(year)]] <- site_data
+  # Save the raster to the list
+  summer_rasters[[year]] <- summer_raster
+  
+  
+  # Print a message for progress tracking
+  print(paste("Processed year:", year))
 }
 
-# Combine all yearly site-level results into a single data frame
-all_precip_data <- do.call(rbind, results_list)
+antecedent_monsoon_precip_2011_raster <- summer_rasters[["2011"]]
+antecedent_monsoon_precip_2016_raster <- summer_rasters[["2016"]]
+antecedent_monsoon_precip_2017_raster <- summer_rasters[["2017"]]
+antecedent_monsoon_precip_2020_raster <- summer_rasters[["2020"]]
+antecedent_monsoon_precip_2021_raster <- summer_rasters[["2021"]]
+
+### ---- Winter Precipitation ----
+# Define the years for which you want to calculate winter precipitation.
+# Each year represents the January of the winter (e.g., winter 2011-2012 is represented by 2012)
+winter_years <- c("2012", "2017", "2018", "2021", "2022")
+
+# Base directory where your PRISM rasters are stored
+base_path <- "PRISM_winter_precip"
+
+# Initialize list to store the summed winter precipitation rasters
+winter_rasters <- list()
+
+# Loop through each winter year
+for (year in winter_years) {
+  
+  # Determine the December year (previous calendar year)
+  dec_year <- as.character(as.numeric(year) - 1)
+  jan_year <- year
+  
+  # Construct file paths for December and January rasters
+  dec_path <- file.path(base_path, dec_year, paste0("PRISM_ppt_stable_4kmM3_", dec_year, "12_bil.bil"))
+  jan_path <- file.path(base_path, jan_year, paste0("PRISM_ppt_stable_4kmM3_", jan_year, "01_bil.bil"))
+  
+  # Load the rasters
+  dec_raster <- rast(dec_path)
+  jan_raster <- rast(jan_path)
+  
+  # Stack the rasters and calculate total winter precipitation
+  winter_stack <- c(dec_raster, jan_raster)
+  winter_total <- sum(winter_stack, na.rm = TRUE)
+  
+  # Save to the list
+  winter_rasters[[year]] <- winter_total
+  
+  # Progress message
+  print(paste("Processed winter ending in:", year))
+}
+
+# Optionally assign individual years to named variables
+winter_precip_2012_raster <- winter_rasters[["2012"]]
+winter_precip_2017_raster <- winter_rasters[["2017"]]
+winter_precip_2018_raster <- winter_rasters[["2018"]]
+winter_precip_2021_raster <- winter_rasters[["2021"]]
+winter_precip_2022_raster <- winter_rasters[["2022"]]
+
+# Identify variables with the pattern "precip_****_**_raster"
+monthly_rasters <- ls(pattern = "^precip_\\d{4}_\\d{2}_raster$")
+rm(list = monthly_rasters)
+
+## ---- Extract Precipitation Data for Sites ----
+
+### ---- Transform Site Spatial Data ----
+#The following script imports a shapefile for study sites, ensuring consistency in coordinate reference systems (CRS) with PRISM rasters.
+print(crs(sites_shp))
+print(crs(precip_2011_raster))
+sites_shp <- project(sites_shp, crs(precip_2011_raster))
+
+### ---- Antecedent Monsoon ----
+# Define the years you're interested in
+years <- c(2011, 2016, 2017, 2020, 2021)
+
+# Path to directory with monsoon rasters
+base_path <- "PRISM_summer_precip"
+
+# Initialize list to store results
+monsoon_results <- list()
+
+for (year in years) {
+  
+  # Define file paths for July, August, September
+  months <- c("07", "08", "09")
+  file_paths <- file.path(base_path, year, paste0("PRISM_ppt_stable_4kmM3_", year, months, "_bil.bil"))
+  
+  # Load and sum the 3 monthly rasters
+  monthly_rasters <- lapply(file_paths, rast)
+  monsoon_raster <- sum(rast(monthly_rasters), na.rm = TRUE)
+  
+  # Extract monsoon precip values at site locations
+  precip_values <- extract(monsoon_raster, sites_shp)
+  
+  # Join with site shapefile data
+  subsite_data <- as.data.frame(sites_shp)
+  subsite_data$Monsoon_Precipitation <- precip_values[, 2]  # Column 2 has the values
+  subsite_data$Year <- year
+  
+  # Group by Site and Year to get mean per site
+  site_data <- subsite_data %>%
+    group_by(Site, Year) %>%
+    summarize(Mean_Monsoon_Precip = mean(Monsoon_Precipitation, na.rm = TRUE), .groups = "drop")
+  
+  # Store this year's data
+  monsoon_results[[as.character(year)]] <- site_data
+}
+
+# Combine all years
+monsoon_precip_data <- bind_rows(monsoon_results)
+
+### ---- Winter ----
+# Define winters by the year of the January raster
+winter_years <- c(2012, 2017, 2018, 2021, 2022)
+
+# Base directory for winter rasters
+base_path <- "PRISM_winter_precip"
+
+# Initialize list to store results
+winter_results <- list()
+
+for (year in winter_years) {
+  
+  # Get December of previous year and January of current year
+  dec_year <- as.character(as.numeric(year) - 1)
+  jan_year <- as.character(year)
+  
+  # Construct file paths
+  dec_path <- file.path(base_path, dec_year, paste0("PRISM_ppt_stable_4kmM3_", dec_year, "12_bil.bil"))
+  jan_path <- file.path(base_path, jan_year, paste0("PRISM_ppt_stable_4kmM3_", jan_year, "01_bil.bil"))
+  
+  # Load rasters
+  dec_raster <- rast(dec_path)
+  jan_raster <- rast(jan_path)
+  
+  # Sum December and January to get winter precipitation
+  winter_raster <- sum(c(dec_raster, jan_raster), na.rm = TRUE)
+  
+  # Extract values at site locations
+  precip_values <- extract(winter_raster, sites_shp)
+  
+  # Combine with shapefile data
+  subsite_data <- as.data.frame(sites_shp)
+  subsite_data$Winter_Precipitation <- precip_values[, 2]
+  subsite_data$Winter_Year <- as.numeric(year)
+  
+  # Group by site and year, then average
+  site_data <- subsite_data %>%
+    group_by(Site, Winter_Year) %>%
+    summarize(Mean_Winter_Precip = mean(Winter_Precipitation, na.rm = TRUE), .groups = "drop")
+  
+  # Store in results list
+  winter_results[[as.character(year)]] <- site_data
+}
+
+# Combine all years into a single data frame
+winter_precip_data <- bind_rows(winter_results)
+
+## ---- Antecedent Monsoon Precipitation Map ----
+# This code produces a faceted map that displays the spatial distribution of summer precipitation for the years 2011, 2016, 2017, 2020, and 2021.
+# Define a list of the rasters
+rasters <- list(
+  precip_2011 = antecedent_monsoon_precip_2011_raster,
+  precip_2016 = antecedent_monsoon_precip_2016_raster,
+  precip_2017 = antecedent_monsoon_precip_2017_raster,
+  precip_2020 = antecedent_monsoon_precip_2020_raster,
+  precip_2021 = antecedent_monsoon_precip_2021_raster
+)
+
+# Define a list of corresponding years for labeling
+years <- c("2011", "2016", "2017", "2020", "2021")
+
+# Calculate global minimum and maximum precipitation values across all rasters
+min_precip <- min(sapply(rasters, function(r) min(values(r), na.rm = TRUE)))
+max_precip <- max(sapply(rasters, function(r) max(values(r), na.rm = TRUE)))
+
+# Create an empty list to store all the data for ggplot
+plot_data <- list()
+
+# Loop through each raster and prepare data for ggplot
+for (i in 1:length(rasters)) {
+  
+  # Get the current raster and year
+  current_raster <- rasters[[i]]
+  current_year <- years[i]
+  
+  # Convert the current raster to a data.frame for ggplot
+  precip_df <- as.data.frame(current_raster, xy = TRUE, na.rm = TRUE)  # Remove NAs
+  
+  # Rename the third column to "precip"
+  colnames(precip_df)[3] <- "precip"
+  
+  # Apply log transformation to precipitation values (log(x + 1) to avoid log(0))
+  precip_df$precip_log <- log(precip_df$precip + 1)
+  
+  # Add the year to the data for faceting
+  precip_df$year <- current_year
+  
+  # Store the data in the list
+  plot_data[[i]] <- precip_df
+}
+
+# Combine all the data into a single data frame
+plot_data_df <- do.call(rbind, plot_data)
+
+# Convert SpatVector to sf object
+sites <- st_as_sf(sites_shp)
+
+# Create the plot with facet wrap
+plot <- ggplot(plot_data_df) +
+  # Add the precipitation raster layer
+  geom_raster(aes(x = x, y = y, fill = precip_log)) +
+  
+  # Add a color scale for the precipitation with fixed limits for consistency
+  scale_fill_viridis(option = "D", name = "Precipitation",
+                     direction = 1) +
+  # limits = c(log(min_precip + 1), log(max_precip + 1))) +
+  
+  # Add the site locations
+  geom_sf(data = sites, color = "black", size = 3, shape = 21, fill = "grey") +
+  
+  # Customize map extent (adjust as needed)
+  coord_sf(xlim = c(-111, -105), ylim = c(31, 37), expand = FALSE) +
+  
+  # Customize the appearance
+  theme_minimal() +
+  labs(
+    title = "Sky Island Sites and Precipitation",
+    subtitle = "Summer precipitation layer for different years (log-transformed)",
+    x = "Longitude", 
+    y = "Latitude"
+  ) +
+  # Round axis labels
+  scale_x_continuous(breaks = seq(-110, -106, by = 2), 
+                     labels = function(x) round(x, 2)) +  # Adjust longitude rounding
+  scale_y_continuous(breaks = seq(31, 37, by = 1), 
+                     labels = function(y) round(y, 2)) +  # Adjust latitude rounding
+  
+  # Facet wrap by year
+  facet_wrap(~ year, nrow=1)
+
+# Print the plot
+print(plot)
+
+# # Extract Average Annual Precipitation Data for Sites
+# # This code extracts precipitation data from raster files for specified years and calculates average precipitation for each study site.
+# years <- c(2011, 2016, 2017, 2020, 2021)
+# results_list <- list()
+# 
+# for (year in years) {
+#   # Load the raster for the year
+#   raster <- rast(paste0("PRISM_precip/PRISM_ppt_stable_4kmM3_", year, "_bil.bil")) 
+#   
+#   # Extract precipitation values for subsites
+#   precip_values <- extract(raster, sites_shp)
+#   
+#   # Combine extracted values with site shapefile data
+#   subsite_data <- as.data.frame(sites_shp) # Convert shapefile to a data frame
+#   subsite_data$Precipitation <- precip_values[, 2] # Add extracted values
+#   subsite_data$Year <- year # Add the year
+#   
+#   # Group by Site and Year, then calculate mean precipitation
+#   site_data <- subsite_data %>%
+#     group_by(Site, Year) %>%
+#     summarize(Mean_Precipitation = mean(Precipitation, na.rm = TRUE), .groups = "drop")
+#   
+#   # Store the yearly averaged data in the results list
+#   results_list[[as.character(year)]] <- site_data
+# }
+# 
+# # Combine all yearly site-level results into a single data frame
+# annual_precip_data <- do.call(rbind, results_list)
 
 
 # ---- Perform Extinction Simulations and Calculate Robustness ----
@@ -390,31 +609,68 @@ for (scenario_name in names(scenarios)) {
   print(scenario_df)
 }
 
-
-
-
-
-
-
-
 ## ---- SCM: Stochastic Coextinction Model ----
 
 #source('SCM/VieraAlmeida2015RFunctions/netcascade (April 2014).R')
 source("SCM/Dalsgaard2018Code/IterNodeDelMultiSim.R")
 
-# read in R values
-rvals <- read.csv("SCM/Dalsgaard2018Code/data/rvalues.csv")
-rvals$R <- trimws(rvals$R)
+# # read in R values
+# rvals <- read.csv("SCM/Dalsgaard2018Code/data/rvalues.csv")
+# rvals$R <- trimws(rvals$R)
 
-# create table with upper and lower limits for R bounds
-r_bounds <- as.data.frame(matrix(ncol = 3, nrow = length(unique(rvals$R)), dimnames = list(NULL,c("R","lb","ub"))))
-r_bounds$R <- unique(rvals$R)
-r_bounds[r_bounds$R == "low",][,c("lb","ub")] <- c(0,(1/3))
-r_bounds[r_bounds$R == "high",][,c("lb","ub")] <- c((2/3),1)
-r_bounds[r_bounds$R == "med-high",][,c("lb","ub")] <- c((1/3),1)
-r_bounds[r_bounds$R == "low-med",][,c("lb","ub")] <- c(0,(2/3))
-r_bounds[r_bounds$R == "med",][,c("lb","ub")] <- c((1/3),(2/3))
-r_bounds[r_bounds$R == "low-high",][,c("lb","ub")] <- c(0,1)
+# Generate randomized rvals data frame
+set.seed(42)  # For reproducibility
+
+# Define R categories as used in your bounds
+r_categories <- c("low", "med", "high", "low-med", "med-high", "low-high")
+
+# Initialize list to collect rvals for each network
+rvals_list <- list()
+
+# Loop through networks
+for (net_name in names(nets)) {
+  network <- nets[[net_name]]
+  
+  # Get plant species (assumes plants are rows)
+  plant_species <- rownames(network)
+  
+  # Assign each plant species a random R category
+  assigned_Rs <- sample(r_categories, length(plant_species), replace = TRUE)
+  
+  # Build data frame
+  df <- data.frame(
+    species = plant_species,
+    R = assigned_Rs,
+    file_name = net_name,
+    stringsAsFactors = FALSE
+  )
+  
+  rvals_list[[net_name]] <- df
+}
+
+# Combine into one data frame
+rvals <- do.call(rbind, rvals_list)
+
+# Create the r_bounds table matching your original logic
+r_bounds <- data.frame(
+  R = r_categories,
+  lb = NA_real_,
+  ub = NA_real_,
+  stringsAsFactors = FALSE
+)
+
+# Define the bounds
+r_bounds[r_bounds$R == "low", c("lb", "ub")] <- c(0, 1/3)
+r_bounds[r_bounds$R == "med", c("lb", "ub")] <- c(1/3, 2/3)
+r_bounds[r_bounds$R == "high", c("lb", "ub")] <- c(2/3, 1)
+r_bounds[r_bounds$R == "low-med", c("lb", "ub")] <- c(0, 2/3)
+r_bounds[r_bounds$R == "med-high", c("lb", "ub")] <- c(1/3, 1)
+r_bounds[r_bounds$R == "low-high", c("lb", "ub")] <- c(0, 1)
+
+# Optional: save to file
+write.csv(rvals, "rvals_randomized.csv", row.names = FALSE)
+
+# Now rvals and r_bounds are ready to be passed into your simulation
 
 # split rvals by web
 rvals <- split(rvals, rvals$file_name)
@@ -496,6 +752,316 @@ vulnerabilities$index <- vulnerabilities$probability.of.extinction * (1-vulnerab
 # probability.of.extinction = PE
 # mean.order = SE
 # index = VE
+
+
+# ---- Modeling Community Resistance ----
+# Metrics: Network redundancy, complementarity, and generalization
+
+setwd("C:/Users/ale_s/University of Oregon Dropbox/Alejandro Santillana Fernandez/extinction-cascades/analysis/network")
+source('src/initialize.R')
+source("src/misc.R")
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(broom.mixed)  # for tidy() and augment() with lme4 models
+library(lme4)
+load('saved/mods/metrics.Rdata')
+
+
+# ## ---- Network Metrics by Year ----
+# ys <- c("FunRedundancy.Pols",
+#         "FunRedundancy.Plants",
+#         "functional.complementarity.HL",
+#         "functional.complementarity.LL",
+#         "mean.number.of.links.HL",
+#         "mean.number.of.links.LL")
+# 
+# # Ensure Year is numeric for prediction grid
+# cor.dats$Year <- as.numeric(as.character(cor.dats$Year))
+# 
+# # Create prediction data frame
+# predict_metric <- function(mod, yname, years) {
+#   new_data <- data.frame(Year = years)
+#   
+#   # Design matrix
+#   mm <- model.matrix(~ Year, new_data)
+#   fit <- mm %*% fixef(mod)
+#   se <- sqrt(diag(mm %*% vcov(mod) %*% t(mm)))
+#   
+#   new_data %>%
+#     mutate(
+#       fit = fit,
+#       se = se,
+#       lower = fit - 1.96 * se,
+#       upper = fit + 1.96 * se,
+#       metric = yname
+#     )
+# }
+# 
+# # Get unique years from data
+# unique_years <- sort(unique(cor.dats$Year))
+# 
+# # Run prediction for each model
+# predictions <- lapply(ys, function(y) {
+#   predict_metric(mods.year[[y]], y, unique_years)
+# })
+# 
+# pred_df <- bind_rows(predictions)
+# 
+# 
+# # Define your labels
+# metric_labels <- c(
+#   "FunRedundancy.Pols" = "Pollinator Redundancy",
+#   "FunRedundancy.Plants" = "Plant Redundancy",
+#   "functional.complementarity.HL" = "Pollinator Complementarity",
+#   "functional.complementarity.LL" = "Plant Complementarity",
+#   "mean.number.of.links.HL" = "Pollinator Generalization",
+#   "mean.number.of.links.LL" = "Plant Generalization"
+# )
+# 
+# ### ---- Visualization ----
+# p <- ggplot(pred_df, aes(x = Year, y = fit)) +
+#   geom_line(color = "black") +
+#   geom_ribbon(aes(ymin = lower, ymax = upper), fill = "gray80", alpha = 0.4) +
+#   geom_point(data = cor.dats %>%
+#                pivot_longer(cols = all_of(ys), names_to = "metric", values_to = "value"),
+#              aes(x = Year, y = value),
+#              inherit.aes = FALSE,
+#              alpha = 0.4, shape = 1) +
+#   facet_wrap(~ metric, scales = "free_y", labeller = labeller(metric = metric_labels)) +
+#   theme_minimal(base_size = 14) +
+#   labs(x = "Year", y = "Predicted value") +
+#   theme(strip.text = element_text(size = 12)) +
+#   scale_x_continuous(
+#     breaks = seq(floor(min(pred_df$Year)), ceiling(max(pred_df$Year)), by = 3),
+#     labels = function(x) as.integer(x)
+#   )
+# 
+# # Save the plot as PDF
+# ggsave("figures/NetworkMetricsByYear.pdf", plot = p, width = 10, height = 7)
+# 
+# # Optional: display the plot in R console
+# print(p)
+
+## ---- Network Metrics by Antecedent Monsoon Precipitation ----
+
+## Join Monsoon Precip into cor.dats
+# Shift monsoon year forward so 2011 precip matches 2012 network data
+monsoon_precip_data_corrected <- monsoon_precip_data %>%
+  mutate(Year = Year + 1)  # Shift year forward by one
+
+# Make sure Site and Year are the same type in both data frames
+monsoon_precip_data_corrected$Year <- as.numeric(monsoon_precip_data_corrected$Year)
+cor.dats$Year <- as.numeric(cor.dats$Year)
+
+# Merge monsoon precipitation into main dataset
+cor.dats <- left_join(cor.dats, monsoon_precip_data_corrected, by = c("Site", "Year"))
+
+# Define the metrics to analyze
+ys <- c("FunRedundancy.Pols",
+        "FunRedundancy.Plants",
+        "functional.complementarity.HL",
+        "functional.complementarity.LL",
+        "mean.number.of.links.HL",
+        "mean.number.of.links.LL")
+
+## Fit models: metric ~ Mean_Monsoon_Precip
+mods.monsoon <- lapply(ys, function(y) {
+  formula <- as.formula(paste(y, "~ Mean_Monsoon_Precip + (1 | Site)"))
+  lmer(formula, data = cor.dats, REML = FALSE)  
+})
+summary(mods.monsoon[[1]])
+names(mods.monsoon) <- ys
+
+## Prediction function using monsoon precipitation
+predict_metric_precip <- function(mod, yname, precip_values) {
+  new_data <- data.frame(Mean_Monsoon_Precip = precip_values)
+  
+  mm <- model.matrix(~ Mean_Monsoon_Precip, new_data)
+  fit <- mm %*% fixef(mod)
+  se <- sqrt(diag(mm %*% vcov(mod) %*% t(mm)))
+  
+  new_data %>%
+    mutate(
+      fit = fit,
+      se = se,
+      lower = fit - 1.96 * se,
+      upper = fit + 1.96 * se,
+      metric = yname
+    )
+}
+
+##  Generate predictions across a reasonable precip range 
+precip_range <- seq(min(cor.dats$Mean_Monsoon_Precip, na.rm = TRUE),
+                    max(cor.dats$Mean_Monsoon_Precip, na.rm = TRUE),
+                    length.out = 100)
+
+predictions_precip <- lapply(ys, function(y) {
+  predict_metric_precip(mods.monsoon[[y]], y, precip_range)
+})
+pred_precip_df <- bind_rows(predictions_precip)
+
+## Plot: Metric ~ Monsoon Precip
+metric_labels <- c(
+  "FunRedundancy.Pols" = "Pollinator Redundancy",
+  "FunRedundancy.Plants" = "Plant Redundancy",
+  "functional.complementarity.HL" = "Pollinator Complementarity",
+  "functional.complementarity.LL" = "Plant Complementarity",
+  "mean.number.of.links.HL" = "Pollinator Generalization",
+  "mean.number.of.links.LL" = "Plant Generalization"
+)
+
+p <- ggplot(pred_precip_df, aes(x = Mean_Monsoon_Precip, y = fit)) +
+  geom_line(color = "black") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "gray80", alpha = 0.4) +
+  geom_point(
+    data = cor.dats %>%
+      pivot_longer(cols = all_of(ys), names_to = "metric", values_to = "value"),
+    aes(x = Mean_Monsoon_Precip, y = value, color = Site, shape = as.factor(Year)),
+    inherit.aes = FALSE,
+    size = 2,
+    alpha = 0.6
+  ) +
+  facet_wrap(~ metric, scales = "free_y", labeller = labeller(metric = metric_labels)) +
+  theme_minimal(base_size = 14) +
+  labs(
+    x = "Monsoon Precipitation (mm)",
+    y = "Predicted value",
+    color = "Site",
+    shape = "Year"
+  ) +
+  theme(strip.text = element_text(size = 12))
+
+ggsave("figures/NetworkMetricsByMonsoonPrecip.pdf", plot = p, width = 10, height = 7)
+print(p)
+
+## ---- Network Metrics by Winter Precipitation ----
+
+winter_precip_data <- winter_precip_data %>%
+  rename(Year = Winter_Year)
+
+# Ensure types match for join
+winter_precip_data$Year <- as.numeric(winter_precip_data$Year)
+cor.dats$Year <- as.numeric(cor.dats$Year)
+
+# Join winter precip data to main dataset
+cor.dats <- left_join(cor.dats, winter_precip_data, by = c("Site", "Year"))
+
+# Define metrics to model
+ys <- c("FunRedundancy.Pols",
+        "FunRedundancy.Plants",
+        "functional.complementarity.HL",
+        "functional.complementarity.LL",
+        "mean.number.of.links.HL",
+        "mean.number.of.links.LL")
+
+### Fit models: metric ~ Mean_Winter_Precip + (1 | Site)
+mods.winter <- lapply(ys, function(y) {
+  formula <- as.formula(paste(y, "~ Mean_Winter_Precip + (1 | Site)"))
+  lmer(formula, data = cor.dats, REML = FALSE)
+})
+names(mods.winter) <- ys
+
+### Prediction function for winter precip
+predict_metric_winter <- function(mod, yname, precip_values) {
+  new_data <- data.frame(Mean_Winter_Precip = precip_values)
+  
+  mm <- model.matrix(~ Mean_Winter_Precip, new_data)
+  fit <- mm %*% fixef(mod)
+  se <- sqrt(diag(mm %*% vcov(mod) %*% t(mm)))
+  
+  new_data %>%
+    mutate(
+      fit = fit,
+      se = se,
+      lower = fit - 1.96 * se,
+      upper = fit + 1.96 * se,
+      metric = yname
+    )
+}
+
+### Generate predictions
+precip_range_winter <- seq(min(cor.dats$Mean_Winter_Precip, na.rm = TRUE),
+                           max(cor.dats$Mean_Winter_Precip, na.rm = TRUE),
+                           length.out = 100)
+
+predictions_winter <- lapply(ys, function(y) {
+  predict_metric_winter(mods.winter[[y]], y, precip_range_winter)
+})
+pred_winter_df <- bind_rows(predictions_winter)
+
+### Plot
+metric_labels <- c(
+  "FunRedundancy.Pols" = "Pollinator Redundancy",
+  "FunRedundancy.Plants" = "Plant Redundancy",
+  "functional.complementarity.HL" = "Pollinator Complementarity",
+  "functional.complementarity.LL" = "Plant Complementarity",
+  "mean.number.of.links.HL" = "Pollinator Generalization",
+  "mean.number.of.links.LL" = "Plant Generalization"
+)
+
+p_winter <- ggplot(pred_winter_df, aes(x = Mean_Winter_Precip, y = fit)) +
+  geom_line(color = "black") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "gray80", alpha = 0.4) +
+  geom_point(
+    data = cor.dats %>%
+      pivot_longer(cols = all_of(ys), names_to = "metric", values_to = "value"),
+    aes(x = Mean_Winter_Precip, y = value, color = Site, shape = as.factor(Year)),
+    inherit.aes = FALSE,
+    size = 2,
+    alpha = 0.6
+  ) +
+  facet_wrap(~ metric, scales = "free_y", labeller = labeller(metric = metric_labels)) +
+  theme_minimal(base_size = 14) +
+  labs(
+    x = "Winter Precipitation (mm)",
+    y = "Predicted value",
+    color = "Site",
+    shape = "Year"
+  ) +
+  theme(strip.text = element_text(size = 12))
+
+ggsave("figures/NetworkMetricsByWinterPrecip.pdf", plot = p_winter, width = 10, height = 7)
+print(p_winter)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
