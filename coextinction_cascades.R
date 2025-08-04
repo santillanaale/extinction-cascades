@@ -427,6 +427,106 @@ print(plot)
 # # Combine all yearly site-level results into a single data frame
 # annual_precip_data <- do.call(rbind, results_list)
 
+# ---- Temperature Data ----
+# Extract site coords for temperature data download
+coords <- crds(sites_shp, df = TRUE)
+coords$Site <- sites_shp$Site  # Adjust to match your actual site name column
+# Average lat/lon per Site
+sites_avg <- coords %>%
+  group_by(Site) %>%
+  summarize(
+    latitude = mean(y),
+    longitude = mean(x),
+    .groups = "drop"
+  )
+
+## ---- Import Daily min max Temp Data ----
+temp_2012 <- read.csv("PRISM_temp/PRISM_tmin_tmax_stable_800m_20120101_20121231.csv", skip = 10, stringsAsFactors = FALSE)
+temp_2017 <- read.csv("PRISM_temp/PRISM_tmin_tmax_stable_800m_20170101_20171231.csv", skip = 10, stringsAsFactors = FALSE)
+temp_2018 <- read.csv("PRISM_temp/PRISM_tmin_tmax_stable_800m_20180101_20181231.csv", skip = 10, stringsAsFactors = FALSE)
+temp_2021 <- read.csv("PRISM_temp/PRISM_tmin_tmax_stable_800m_20210101_20211231.csv", skip = 10, stringsAsFactors = FALSE)
+temp_2022 <- read.csv("PRISM_temp/PRISM_tmin_tmax_stable_800m_20220101_20220131.csv", skip = 10, stringsAsFactors = FALSE)
+
+# Process each year's temp df
+process_temp_data <- function(df) {
+  df %>%
+    rename(
+      site_name = Name,
+      longitude = Longitude,
+      latitude = Latitude,
+      elevation = Elevation..m.,
+      date = Date,
+      tmin = tmin..degrees.C.,
+      tmax = tmax..degrees.C.
+    ) %>%
+    mutate(
+      date = as.Date(date),
+      year = year(date),
+      month = month(date),
+      gdd = calculate_gdd(tmin, tmax, base_temp = 10)
+    )
+}
+
+## ---- Calculate Growing Degree Days ----
+calculate_gdd <- function(tmin, tmax, base_temp = 10, upper_temp = NA) {
+  tmin <- pmax(tmin, base_temp)
+  tmax <- pmax(tmax, base_temp)
+  
+  if (!is.na(upper_temp)) {
+    tmin <- pmin(tmin, upper_temp)
+    tmax <- pmin(tmax, upper_temp)
+  }
+  
+  gdd <- (tmax + tmin) / 2 - base_temp
+  gdd[gdd < 0] <- 0
+  return(gdd)
+}
+
+# Process each year
+temp_2012_clean <- process_temp_data(temp_2012)
+temp_2017_clean <- process_temp_data(temp_2017)
+temp_2018_clean <- process_temp_data(temp_2018)
+temp_2021_clean <- process_temp_data(temp_2021)
+temp_2022_clean <- process_temp_data(temp_2022)
+
+# Combine into one df
+all_temp_data <- bind_rows(
+  temp_2012_clean,
+  temp_2017_clean,
+  temp_2018_clean,
+  temp_2021_clean,
+  temp_2022_clean
+)
+
+## ---- Summarize by site and year ----
+annual_gdd <- all_temp_data %>%
+  group_by(site_name, year) %>%
+  summarize(total_gdd = sum(gdd, na.rm = TRUE), .groups = "drop")
+
+## ---- Monsoon season GDD ----
+monsoon_gdd <- all_temp_data %>%
+  filter(month %in% 7:9) %>%
+  group_by(site_name, year) %>%
+  summarize(monsoon_gdd = sum(gdd, na.rm = TRUE), .groups = "drop")
+
+## ---- Winter GDD ----
+# Add winter year column
+all_temp_data <- all_temp_data %>%
+  mutate(
+    winter_year = case_when(
+      month == 12 ~ year(date) + 1,
+      month %in% 1:2 ~ year(date),
+      TRUE ~ NA_real_
+    )
+  )
+
+winter_gdd <- all_temp_data %>%
+  filter(month %in% c(12, 1)) %>%
+  filter(!is.na(winter_year)) %>%
+  group_by(site_name, winter_year) %>%
+  summarize(winter_gdd = sum(gdd, na.rm = TRUE), .groups = "drop") %>%
+  rename(Year = winter_year)
+
 
 # ---- Perform Extinction Simulations and Calculate Robustness ----
 
@@ -768,7 +868,7 @@ library(lme4)
 load('saved/mods/metrics.Rdata')
 
 
-# ## ---- Network Metrics by Year ----
+## ---- By Year ----
 # ys <- c("FunRedundancy.Pols",
 #         "FunRedundancy.Plants",
 #         "functional.complementarity.HL",
@@ -819,7 +919,7 @@ load('saved/mods/metrics.Rdata')
 #   "mean.number.of.links.LL" = "Plant Generalization"
 # )
 # 
-# ### ---- Visualization ----
+# ###  Visualization
 # p <- ggplot(pred_df, aes(x = Year, y = fit)) +
 #   geom_line(color = "black") +
 #   geom_ribbon(aes(ymin = lower, ymax = upper), fill = "gray80", alpha = 0.4) +
@@ -843,7 +943,7 @@ load('saved/mods/metrics.Rdata')
 # # Optional: display the plot in R console
 # print(p)
 
-## ---- Network Metrics by Antecedent Monsoon Precipitation ----
+## ---- By Antecedent Monsoon Precipitation ----
 
 ## Join Monsoon Precip into cor.dats
 # Shift monsoon year forward so 2011 precip matches 2012 network data
@@ -935,7 +1035,7 @@ p <- ggplot(pred_precip_df, aes(x = Mean_Monsoon_Precip, y = fit)) +
 ggsave("figures/NetworkMetricsByMonsoonPrecip.pdf", plot = p, width = 10, height = 7)
 print(p)
 
-## ---- Network Metrics by Winter Precipitation ----
+## ---- By Winter Precipitation ----
 
 winter_precip_data <- winter_precip_data %>%
   rename(Year = Winter_Year)
@@ -1024,6 +1124,96 @@ p_winter <- ggplot(pred_winter_df, aes(x = Mean_Winter_Precip, y = fit)) +
 ggsave("figures/NetworkMetricsByWinterPrecip.pdf", plot = p_winter, width = 10, height = 7)
 print(p_winter)
 
+## ---- By Degree Days ----
+annual_gdd <- annual_gdd %>% rename(Site = site_name)
+annual_gdd <- annual_gdd %>% rename(Year = year)
+
+# Merge with your cor.dats
+cor.dats <- left_join(cor.dats, annual_gdd, by = c("Site", "Year"))
+
+ys <- c("FunRedundancy.Pols",
+        "FunRedundancy.Plants",
+        "functional.complementarity.HL",
+        "functional.complementarity.LL",
+        "mean.number.of.links.HL",
+        "mean.number.of.links.LL")
+
+# Model
+mods.annual_gdd <- lapply(ys, function(y) {
+  formula <- as.formula(paste(y, "~ total_gdd + (1 | Site)"))
+  lmer(formula, data = cor.dats, REML = FALSE)
+})
+names(mods.annual_gdd) <- ys
+
+# Prediction function
+predict_metric_gdd <- function(mod, yname, gdd_values) {
+  new_data <- data.frame(total_gdd = gdd_values)
+  
+  # Construct model matrix for fixed effects only
+  mm <- model.matrix(~ total_gdd, new_data)
+  
+  # Get fixed effect estimates
+  fit <- mm %*% fixef(mod)
+  
+  # Calculate standard errors
+  se <- sqrt(diag(mm %*% vcov(mod) %*% t(mm)))
+  
+  # Return a dataframe with fit and confidence intervals
+  new_data %>%
+    mutate(
+      fit = as.vector(fit),
+      se = se,
+      lower = fit - 1.96 * se,
+      upper = fit + 1.96 * se,
+      metric = yname
+    )
+}
+
+# Generate prediction data over a reasonable GDD range
+gdd_range <- seq(min(cor.dats$total_gdd, na.rm = TRUE),
+                 max(cor.dats$total_gdd, na.rm = TRUE),
+                 length.out = 100)
+
+predictions_gdd <- lapply(ys, function(y) {
+  predict_metric_gdd(mods.annual_gdd[[y]], y, gdd_range)
+})
+
+pred_gdd_df <- bind_rows(predictions_gdd)
+
+# Plotting
+metric_labels <- c(
+  "FunRedundancy.Pols" = "Pollinator Redundancy",
+  "FunRedundancy.Plants" = "Plant Redundancy",
+  "functional.complementarity.HL" = "Pollinator Complementarity",
+  "functional.complementarity.LL" = "Plant Complementarity",
+  "mean.number.of.links.HL" = "Pollinator Generalization",
+  "mean.number.of.links.LL" = "Plant Generalization"
+)
+
+p_gdd <- ggplot(pred_gdd_df, aes(x = total_gdd, y = fit)) +
+  geom_line(color = "black") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "gray80", alpha = 0.4) +
+  geom_point(
+    data = cor.dats %>%
+      pivot_longer(cols = all_of(ys), names_to = "metric", values_to = "value"),
+    aes(x = total_gdd, y = value, color = Site, shape = as.factor(Year)),
+    inherit.aes = FALSE,
+    size = 2,
+    alpha = 0.6
+  ) +
+  facet_wrap(~ metric, scales = "free_y", labeller = labeller(metric = metric_labels)) +
+  theme_minimal(base_size = 14) +
+  labs(
+    x = "Total Growing Degree Days",
+    y = "Predicted Network Metric",
+    color = "Site",
+    shape = "Year"
+  ) +
+  theme(strip.text = element_text(size = 12))
+
+# Save and print plot
+ggsave("analysis/network/figures/NetworkMetricsByTotalGDD.pdf", plot = p_gdd, width = 10, height = 7)
+print(p_gdd)
 
 
 
