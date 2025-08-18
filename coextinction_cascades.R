@@ -14,8 +14,11 @@ library(rnaturalearthdata)
 library(sf)
 library(viridis)
 library(webshot)
+library(patchwork)
+library(ggeffects)
+library(lmerTest)
 
-# ---- Load Networks ----
+  # ---- Load Networks ----
 load("../skyIslands/data/networks/Year_PlantPollinator_Bees.RData") #yearly networks for bees
 
 # ---- Import and Visualize (Sankey) Networks ----
@@ -222,8 +225,8 @@ rm(list = monthly_rasters)
 ### ---- Transform Site Spatial Data ----
 #The following script imports a shapefile for study sites, ensuring consistency in coordinate reference systems (CRS) with PRISM rasters.
 print(crs(sites_shp))
-print(crs(precip_2011_raster))
-sites_shp <- project(sites_shp, crs(precip_2011_raster))
+print(crs(winter_precip_2012_raster))
+sites_shp <- project(sites_shp, crs(winter_precip_2012_raster))
 
 ### ---- Antecedent Monsoon ----
 # Define the years you're interested in
@@ -702,7 +705,7 @@ for (scenario_name in names(scenarios)) {
   scenario_df <- do.call(rbind, results_list)
   
   # Save results
-  save_path <- sprintf("robustness_metrics/%s_robustness_metrics.Rdata", scenario_name)
+  save_path <- sprintf("analysis/network/robustness_metrics/%s_robustness_metrics.Rdata", scenario_name)
   save(scenario_df, file = save_path)
   
   assign(paste0("TCM_", scenario_name, "_robustness_results"), scenario_df)
@@ -711,147 +714,235 @@ for (scenario_name in names(scenarios)) {
 
 ## ---- SCM: Stochastic Coextinction Model ----
 
-#source('SCM/VieraAlmeida2015RFunctions/netcascade (April 2014).R')
-source("SCM/Dalsgaard2018Code/IterNodeDelMultiSim.R")
+# #source('SCM/VieraAlmeida2015RFunctions/netcascade (April 2014).R')
+# source("SCM/Dalsgaard2018Code/IterNodeDelMultiSim.R")
+# 
+# # # read in R values
+# # rvals <- read.csv("SCM/Dalsgaard2018Code/data/rvalues.csv")
+# # rvals$R <- trimws(rvals$R)
+# 
+# # Generate randomized rvals data frame
+# set.seed(42)  # For reproducibility
+# 
+# # Define R categories as used in your bounds
+# r_categories <- c("low", "med", "high", "low-med", "med-high", "low-high")
+# 
+# # Initialize list to collect rvals for each network
+# rvals_list <- list()
+# 
+# # Loop through networks
+# for (net_name in names(nets)) {
+#   network <- nets[[net_name]]
+#   
+#   # Get plant species (assumes plants are rows)
+#   plant_species <- rownames(network)
+#   
+#   # Assign each plant species a random R category
+#   assigned_Rs <- sample(r_categories, length(plant_species), replace = TRUE)
+#   
+#   # Build data frame
+#   df <- data.frame(
+#     species = plant_species,
+#     R = assigned_Rs,
+#     file_name = net_name,
+#     stringsAsFactors = FALSE
+#   )
+#   
+#   rvals_list[[net_name]] <- df
+# }
+# 
+# # Combine into one data frame
+# rvals <- do.call(rbind, rvals_list)
+# 
+# # Create the r_bounds table matching your original logic
+# r_bounds <- data.frame(
+#   R = r_categories,
+#   lb = NA_real_,
+#   ub = NA_real_,
+#   stringsAsFactors = FALSE
+# )
+# 
+# # Define the bounds
+# r_bounds[r_bounds$R == "low", c("lb", "ub")] <- c(0, 1/3)
+# r_bounds[r_bounds$R == "med", c("lb", "ub")] <- c(1/3, 2/3)
+# r_bounds[r_bounds$R == "high", c("lb", "ub")] <- c(2/3, 1)
+# r_bounds[r_bounds$R == "low-med", c("lb", "ub")] <- c(0, 2/3)
+# r_bounds[r_bounds$R == "med-high", c("lb", "ub")] <- c(1/3, 1)
+# r_bounds[r_bounds$R == "low-high", c("lb", "ub")] <- c(0, 1)
+# 
+# # Optional: save to file
+# write.csv(rvals, "rvals_randomized.csv", row.names = FALSE)
+# 
+# # Now rvals and r_bounds are ready to be passed into your simulation
+# 
+# # split rvals by web
+# rvals <- split(rvals, rvals$file_name)
+# 
+# vulnerabilities <- NULL
+# for(i in 1:length(nets)){
+#   
+#   # run simulations
+#   most <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "bo", removal.taxa = "plant", remove.order = "from most connected", nsim = 10000)
+#   strongest <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "bo", removal.taxa = "plant", remove.order = "from strongest", nsim = 10000)
+#   random <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "bo", removal.taxa = "plant", remove.order = "random", nsim = 10000)
+#   weakest <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "bo", removal.taxa = "plant", remove.order = "from weakest", nsim = 10000)
+#   least <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "bo", removal.taxa = "plant", remove.order = "from least connected", nsim = 10000)
+#   
+#   r.most <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "random", removal.taxa = "plant", remove.order = "from most connected", nsim = 10000)
+#   r.strongest <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "random", removal.taxa = "plant", remove.order = "from strongest", nsim = 10000)
+#   r.random <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "random", removal.taxa = "plant", remove.order = "random", nsim = 10000)
+#   r.weakest <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "random", removal.taxa = "plant", remove.order = "from weakest", nsim = 10000)
+#   r.least <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "random", removal.taxa = "plant", remove.order = "from least connected", nsim = 10000)
+#   
+#   # gather results
+#   most <- merge(most$mean_order, most$mean_vulnerability, by = "species")
+#   most$web <- names(nets)[i]
+#   most$removal.order <- "from most connected"
+#   most$plantR <- "assigned"
+#   
+#   strongest <- merge(strongest$mean_order, strongest$mean_vulnerability, by = "species")
+#   strongest$web <- names(nets)[i]
+#   strongest$removal.order <- "from strongest"
+#   strongest$plantR <- "assigned"
+#   
+#   random <- merge(random$mean_order, random$mean_vulnerability, by = "species")
+#   random$web <- names(nets)[i]
+#   random$removal.order <- "random"
+#   random$plantR <- "assigned"
+#   
+#   weakest <- merge(weakest$mean_order, weakest$mean_vulnerability, by = "species")
+#   weakest$web <- names(nets)[i]
+#   weakest$removal.order <- "from weakest"
+#   weakest$plantR <- "assigned"
+#   
+#   least <- merge(least$mean_order, least$mean_vulnerability, by = "species")
+#   least$web <- names(nets)[i]
+#   least$removal.order <- "from least connected"
+#   least$plantR <- "assigned"
+#   
+#   r.most <- merge(r.most$mean_order, r.most$mean_vulnerability, by = "species")
+#   r.most$web <- names(nets)[i]
+#   r.most$removal.order <- "from most connected"
+#   r.most$plantR <- "random"
+#   
+#   r.strongest <- merge(r.strongest$mean_order, r.strongest$mean_vulnerability, by = "species")
+#   r.strongest$web <- names(nets)[i]
+#   r.strongest$removal.order <- "from strongest"
+#   r.strongest$plantR <- "random"
+#   
+#   r.random <- merge(r.random$mean_order, r.random$mean_vulnerability, by = "species")
+#   r.random$web <- names(nets)[i]
+#   r.random$removal.order <- "random"
+#   r.random$plantR <- "random"
+#   
+#   r.weakest <- merge(r.weakest$mean_order, r.weakest$mean_vulnerability, by = "species")
+#   r.weakest$web <- names(nets)[i]
+#   r.weakest$removal.order <- "from weakest"
+#   r.weakest$plantR <- "random"
+#   
+#   r.least <- merge(r.least$mean_order, r.least$mean_vulnerability, by = "species")
+#   r.least$web <- names(nets)[i]
+#   r.least$removal.order <- "from least connected"
+#   r.least$plantR <- "random"
+#   
+#   vulnerabilities <- rbind(vulnerabilities,rbind(most,strongest,random,weakest,least,r.most,r.strongest,r.random,r.weakest,r.least))
+#   
+#   print(paste0(i,"/8"))
+# }
+# 
+# vulnerabilities$index <- vulnerabilities$probability.of.extinction * (1-vulnerabilities$mean.order)
+# # Key of how column names map onto vulnerability indices from the paper:
+# # probability.of.extinction = PE
+# # mean.order = SE
+# # index = VE
 
-# # read in R values
-# rvals <- read.csv("SCM/Dalsgaard2018Code/data/rvalues.csv")
-# rvals$R <- trimws(rvals$R)
+## ---- Plotting Robustness ----
+# Choose the robustness data (e.g., for 'abun' scenario)
+robustness_df <- TCM_abun_robustness_results
 
-# Generate randomized rvals data frame
-set.seed(42)  # For reproducibility
+# Correct for antecedent monsoon year
+monsoon_precip_data_df <- monsoon_precip_data %>%
+  mutate(Year = Year + 1)  # Shift year forward by one
 
-# Define R categories as used in your bounds
-r_categories <- c("low", "med", "high", "low-med", "med-high", "low-high")
+# Change column names for winter precip
+winter_precip_data_df <- winter_precip_data %>%
+  rename(Year = Winter_Year)
 
-# Initialize list to collect rvals for each network
-rvals_list <- list()
+# Change column names for GDD
+annual_gdd_df <- annual_gdd %>%
+  rename(Site = site_name, Year = year)
 
-# Loop through networks
-for (net_name in names(nets)) {
-  network <- nets[[net_name]]
+# Merge all climate data into robustness_df
+robustness_climate <- robustness_df %>%
+  left_join(monsoon_precip_data_df, by = c("Site", "Year")) %>%
+  left_join(winter_precip_data_df, by = c("Site", "Year")) %>%
+  left_join(annual_gdd_df, by = c("Site", "Year"))
+
+# Plot
+p1 <- ggplot(robustness_climate, aes(x = Mean_Monsoon_Precip, y = Robustness)) +
+  geom_point(aes(color = Site)) + geom_smooth(method = "lm") + theme_minimal() +
+  labs(title = "Monsoon Precip")
+
+p2 <- ggplot(robustness_climate, aes(x = Mean_Winter_Precip, y = Robustness)) +
+  geom_point(aes(color = Site)) + geom_smooth(method = "lm") + theme_minimal() +
+  labs(title = "Winter Precip")
+
+p3 <- ggplot(robustness_climate, aes(x = total_gdd, y = Robustness)) +
+  geom_point(aes(color = Site)) + geom_smooth(method = "lm") + theme_minimal() +
+  labs(title = "GDD")
+
+# Combine into 1 row
+p1 + p2 + p3 + plot_layout(ncol = 3)
+ggsave("analysis/network/figures/RobustnessbyClimate.pdf", width = 12, height = 4)
+
+## ---- Modeling Robustness ----
+# Standardize predictors
+robustness_climate <- robustness_climate %>%
+  mutate(across(c(Mean_Monsoon_Precip, Mean_Winter_Precip, total_gdd),
+                ~ scale(.)[,1],  # extract the numeric column from scale()
+                .names = "z_{.col}"))
+# 
+# # Individual models
+# mod_monsoon <- lmer(Robustness ~ z_Mean_Monsoon_Precip + (1 | Site), data = robustness_climate)
+# mod_winter <- lmer(Robustness ~ z_Mean_Winter_Precip + (1 | Site), data = robustness_climate)
+# mod_gdd    <- lmer(Robustness ~ z_total_gdd + (1 | Site), data = robustness_climate)
+
+# Combined model
+mod_all <- lmer(Robustness ~ z_Mean_Monsoon_Precip + z_Mean_Winter_Precip + z_total_gdd + (1 | Site),
+                data = robustness_climate)
+summary(mod_all)
+
+# Get p-values
+model_summary <- summary(mod_all)$coefficients
+
+# Identify significance of each fixed effect (p < 0.05)
+sig_monsoon <- model_summary["z_Mean_Monsoon_Precip", "Pr(>|t|)"] < 0.05
+sig_winter  <- model_summary["z_Mean_Winter_Precip", "Pr(>|t|)"] < 0.05
+sig_gdd     <- model_summary["z_total_gdd", "Pr(>|t|)"] < 0.05
+
+# Predict effects for each variable
+monsoon_eff <- ggpredict(mod_all, terms = "z_Mean_Monsoon_Precip")
+winter_eff  <- ggpredict(mod_all, terms = "z_Mean_Winter_Precip")
+gdd_eff     <- ggpredict(mod_all, terms = "z_total_gdd")
+
+# Plot each effect separately (clean & labeled)
+plot_effect <- function(pred_df, xlab, title, significant = FALSE) {
+  line_type <- ifelse(significant, "solid", "dashed")
   
-  # Get plant species (assumes plants are rows)
-  plant_species <- rownames(network)
-  
-  # Assign each plant species a random R category
-  assigned_Rs <- sample(r_categories, length(plant_species), replace = TRUE)
-  
-  # Build data frame
-  df <- data.frame(
-    species = plant_species,
-    R = assigned_Rs,
-    file_name = net_name,
-    stringsAsFactors = FALSE
-  )
-  
-  rvals_list[[net_name]] <- df
+  ggplot(pred_df, aes(x = x, y = predicted)) +
+    geom_line(size = 1, linetype = line_type) +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.3) +
+    labs(x = xlab, y = "Predicted Robustness", title = title) +
+    theme_minimal(base_size = 14)
 }
 
-# Combine into one data frame
-rvals <- do.call(rbind, rvals_list)
+p1 <- plot_effect(monsoon_eff, "Standardized Monsoon Precipitation", "Effect of Monsoon Precipitation", significant = sig_monsoon)
+p2 <- plot_effect(winter_eff,  "Standardized Winter Precipitation", "Effect of Winter Precipitation", significant = sig_winter)
+p3 <- plot_effect(gdd_eff,     "Standardized Growing Degree Days (GDD)", "Effect of GDD", significant = sig_gdd)
 
-# Create the r_bounds table matching your original logic
-r_bounds <- data.frame(
-  R = r_categories,
-  lb = NA_real_,
-  ub = NA_real_,
-  stringsAsFactors = FALSE
-)
-
-# Define the bounds
-r_bounds[r_bounds$R == "low", c("lb", "ub")] <- c(0, 1/3)
-r_bounds[r_bounds$R == "med", c("lb", "ub")] <- c(1/3, 2/3)
-r_bounds[r_bounds$R == "high", c("lb", "ub")] <- c(2/3, 1)
-r_bounds[r_bounds$R == "low-med", c("lb", "ub")] <- c(0, 2/3)
-r_bounds[r_bounds$R == "med-high", c("lb", "ub")] <- c(1/3, 1)
-r_bounds[r_bounds$R == "low-high", c("lb", "ub")] <- c(0, 1)
-
-# Optional: save to file
-write.csv(rvals, "rvals_randomized.csv", row.names = FALSE)
-
-# Now rvals and r_bounds are ready to be passed into your simulation
-
-# split rvals by web
-rvals <- split(rvals, rvals$file_name)
-
-vulnerabilities <- NULL
-for(i in 1:length(nets)){
-  
-  # run simulations
-  most <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "bo", removal.taxa = "plant", remove.order = "from most connected", nsim = 10000)
-  strongest <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "bo", removal.taxa = "plant", remove.order = "from strongest", nsim = 10000)
-  random <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "bo", removal.taxa = "plant", remove.order = "random", nsim = 10000)
-  weakest <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "bo", removal.taxa = "plant", remove.order = "from weakest", nsim = 10000)
-  least <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "bo", removal.taxa = "plant", remove.order = "from least connected", nsim = 10000)
-  
-  r.most <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "random", removal.taxa = "plant", remove.order = "from most connected", nsim = 10000)
-  r.strongest <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "random", removal.taxa = "plant", remove.order = "from strongest", nsim = 10000)
-  r.random <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "random", removal.taxa = "plant", remove.order = "random", nsim = 10000)
-  r.weakest <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "random", removal.taxa = "plant", remove.order = "from weakest", nsim = 10000)
-  r.least <- IterNodeDelMultiSim(network = nets[[names(nets[i])]], plant_r_assignments = rvals[[names(nets[i])]], r_ints = r_bounds, bo_or_random = "random", removal.taxa = "plant", remove.order = "from least connected", nsim = 10000)
-  
-  # gather results
-  most <- merge(most$mean_order, most$mean_vulnerability, by = "species")
-  most$web <- names(nets)[i]
-  most$removal.order <- "from most connected"
-  most$plantR <- "assigned"
-  
-  strongest <- merge(strongest$mean_order, strongest$mean_vulnerability, by = "species")
-  strongest$web <- names(nets)[i]
-  strongest$removal.order <- "from strongest"
-  strongest$plantR <- "assigned"
-  
-  random <- merge(random$mean_order, random$mean_vulnerability, by = "species")
-  random$web <- names(nets)[i]
-  random$removal.order <- "random"
-  random$plantR <- "assigned"
-  
-  weakest <- merge(weakest$mean_order, weakest$mean_vulnerability, by = "species")
-  weakest$web <- names(nets)[i]
-  weakest$removal.order <- "from weakest"
-  weakest$plantR <- "assigned"
-  
-  least <- merge(least$mean_order, least$mean_vulnerability, by = "species")
-  least$web <- names(nets)[i]
-  least$removal.order <- "from least connected"
-  least$plantR <- "assigned"
-  
-  r.most <- merge(r.most$mean_order, r.most$mean_vulnerability, by = "species")
-  r.most$web <- names(nets)[i]
-  r.most$removal.order <- "from most connected"
-  r.most$plantR <- "random"
-  
-  r.strongest <- merge(r.strongest$mean_order, r.strongest$mean_vulnerability, by = "species")
-  r.strongest$web <- names(nets)[i]
-  r.strongest$removal.order <- "from strongest"
-  r.strongest$plantR <- "random"
-  
-  r.random <- merge(r.random$mean_order, r.random$mean_vulnerability, by = "species")
-  r.random$web <- names(nets)[i]
-  r.random$removal.order <- "random"
-  r.random$plantR <- "random"
-  
-  r.weakest <- merge(r.weakest$mean_order, r.weakest$mean_vulnerability, by = "species")
-  r.weakest$web <- names(nets)[i]
-  r.weakest$removal.order <- "from weakest"
-  r.weakest$plantR <- "random"
-  
-  r.least <- merge(r.least$mean_order, r.least$mean_vulnerability, by = "species")
-  r.least$web <- names(nets)[i]
-  r.least$removal.order <- "from least connected"
-  r.least$plantR <- "random"
-  
-  vulnerabilities <- rbind(vulnerabilities,rbind(most,strongest,random,weakest,least,r.most,r.strongest,r.random,r.weakest,r.least))
-  
-  print(paste0(i,"/8"))
-}
-
-vulnerabilities$index <- vulnerabilities$probability.of.extinction * (1-vulnerabilities$mean.order)
-# Key of how column names map onto vulnerability indices from the paper:
-# probability.of.extinction = PE
-# mean.order = SE
-# index = VE
+combined_plot <- p1 + p2 + p3 + plot_layout(ncol = 1)
+combined_plot
+ggsave("analysis/network/figures/Robustness_ClimateEffects_Combined.pdf", plot = combined_plot, width = 8, height = 10)
 
 
 # ---- Modeling Community Resistance ----
@@ -1121,7 +1212,7 @@ p_winter <- ggplot(pred_winter_df, aes(x = Mean_Winter_Precip, y = fit)) +
   ) +
   theme(strip.text = element_text(size = 12))
 
-ggsave("figures/NetworkMetricsByWinterPrecip.pdf", plot = p_winter, width = 10, height = 7)
+ggsave("analysis/network/figures/NetworkMetricsByWinterPrecip.pdf", plot = p_winter, width = 10, height = 7)
 print(p_winter)
 
 ## ---- By Degree Days ----
