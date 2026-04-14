@@ -80,3 +80,23 @@ plot_climate_effects <- function(mods, climate_var, data) {
     ) +
     guides(shape = "none")
 }
+
+predict_metric <- function(mod, climate_var, values) {
+  new_data <- data.frame(x = values)
+  colnames(new_data) <- climate_var
+  
+  mm <- model.matrix(
+    as.formula(paste0("~ scale(", climate_var, ")")),
+    new_data
+  )
+  
+  fit <- mm %*% fixef(mod)
+  se  <- sqrt(diag(mm %*% vcov(mod) %*% t(mm)))
+  
+  new_data %>%
+    mutate(
+      fit = as.vector(fit),
+      lower = fit - 1.96 * se,
+      upper = fit + 1.96 * se
+    )
+}

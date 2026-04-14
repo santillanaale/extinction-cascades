@@ -8,6 +8,7 @@ library(broom.mixed)
 library(lmerTest)
 library(ggeffects)
 library(car)
+library(performance)
 set.seed(123)
 setwd("~/")
 source("lab_paths.R")
@@ -25,12 +26,9 @@ load("analysis/network/saved/corMets_PlantPollinator_YearSR.Rdata")
 ## *******************************************************************
 # ---- TCM Robustness Models ----
 ## *******************************************************************
-
-## ---- Merge climate into robustness results ----
 tcm_climate <- robustness_results %>%
   left_join(climate, by = c("Site", "Year", "SampleRound"))
 
-## ---- Full Climate Model ----
 mod_tcm <- lmer(
   Robustness ~
     scale(APi) +
@@ -43,8 +41,9 @@ mod_tcm <- lmer(
 
 summary(mod_tcm)
 vif(mod_tcm)
+r2(mod_tcm)
 
-## ---- Model-based predictions ----
+## ---- Predictions ----
 tcm_preds_api <- ggpredict(
   mod_tcm,
   terms = c("APi [all]", "scenario")
@@ -59,7 +58,7 @@ tcm_preds_anom <- ggpredict(
 p_tcm_api <- ggplot(tcm_preds_api,
                     aes(x = x, y = predicted,
                         color = group, fill = group)) +
-  geom_line(linewidth = 1) +
+  geom_line(linewidth = 1, linetype = "solid") +
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high),
               alpha = 0.2, color = NA) +
   theme_minimal() +
@@ -70,10 +69,17 @@ p_tcm_api <- ggplot(tcm_preds_api,
     fill = "Extinction scenario"
   )
 
+p_tcm_api <- p_tcm_api +
+  annotate("text",
+           x = Inf, y = Inf,
+           label = "Marginal R² = 0.83\nConditional R² = 0.89",
+           hjust = 1.1, vjust = 1.5,
+           size = 3.5)
+
 p_tcm_anom <- ggplot(tcm_preds_anom,
                      aes(x = x, y = predicted,
                          color = group, fill = group)) +
-  geom_line(linewidth = 1) +
+  geom_line(linewidth = 1, linetype = "dashed") +
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high),
               alpha = 0.2, color = NA) +
   theme_minimal() +
@@ -96,7 +102,6 @@ ggsave(
 ## *******************************************************************
 # ---- SCM Robustness Models ----
 ## *******************************************************************
-
 scm_climate <- scm_results %>%
   left_join(climate, by = c("Site", "Year", "SampleRound"))
 
@@ -110,6 +115,8 @@ mod_scm <- lmer(
 )
 
 summary(mod_scm)
+vif(mod_scm)
+r2(mod_scm)
 
 ## ---- Predictions ----
 scm_preds_api <- ggpredict(
@@ -150,7 +157,10 @@ p_scm_anom <- ggplot(scm_preds_anom,
   )
 
 (p_scm_api | p_scm_anom) +
-  plot_layout(guides = "collect") &
+  plot_layout(guides = "collect") +
+  plot_annotation(
+    caption = "Marginal R² = 0.26; Conditional R² = 0.78"
+  ) &
   theme(legend.position = "right")
 
 ggsave(
@@ -161,7 +171,6 @@ ggsave(
 ## *******************************************************************
 # ---- Community Resistance Models ----
 ## *******************************************************************
-
 cor.dats <- cor.dats %>%
   separate(
     Site,
@@ -234,16 +243,136 @@ results_all <- bind_rows(
   extract_climate_results(mods_anom, "WindowTmeanAnom")
 )
 
+### ---- Extract r2 ----
+extract_r2 <- function(mods, climate_var) {
+  lapply(names(mods), function(name) {
+    r2_vals <- performance::r2(mods[[name]])
+    
+    data.frame(
+      Metric = name,
+      ClimateVar = climate_var,
+      Marginal_R2 = r2_vals$R2_marginal,
+      Conditional_R2 = r2_vals$R2_conditional
+    )
+  }) %>%
+    bind_rows()
+}
+
+r2_api  <- extract_r2(mods_api, "APi")
+r2_anom <- extract_r2(mods_anom, "WindowTmeanAnom")
+
+r2_all <- bind_rows(r2_api, r2_anom)
+
+results_all <- results_all %>%
+  left_join(r2_all, by = c("Metric", "ClimateVar"))
+
 sig_table <- results_all %>%
   mutate(signif = if_else(p.value < 0.05, "significant", "ns")) %>%
   select(Metric, ClimateVar, signif)
 
 ## ---- Plot resistance effects ----
-# (plot_climate_effects function stays identical to your original,
-#  it uses climate_var as a string so it works with any variable name)
-source("plot_climate_effects.R")
+r2_labels <- r2_all %>%
+  mutate(
+    r2_text = paste0("R²m = ", round(Marginal_R2, 2),
+                     "\nR²c = ", round(Conditional_R2, 2))
+  ) %>%
+  select(Metric, ClimateVar, r2_text)
 
-### ---- Predictions ----
+
+plot_climate_effects <- function(mods, climate_var, data) {
+  
+  climate_range <- seq(
+    min(data[[climate_var]], na.rm = TRUE),
+    max(data[[climate_var]], na.rm = TRUE),
+    length.out = 100
+  )
+  
+  preds <- lapply(names(mods), function(m) {
+    predict_metric(mods[[m]], climate_var, climate_range) %>%
+      mutate(metric = m)
+  }) %>%
+    bind_rows() %>%
+    left_join(
+      sig_table %>%
+        filter(ClimateVar == climate_var),
+      by = c("metric" = "Metric")
+    )
+  
+  raw <- data %>%
+    pivot_longer(
+      cols = all_of(metrics),
+      names_to = "metric",
+      values_to = "value"
+    ) %>%
+    mutate(
+      metric = factor(
+        metric,
+        levels = c(
+          # Pollinators
+          "functional.complementarity.HL",
+          "FunRedundancy.Pols",
+          "mean.number.of.links.HL",
+          "number.of.species.HL",
+          
+          # Plants
+          "functional.complementarity.LL",
+          "FunRedundancy.Plants",
+          "mean.number.of.links.LL",
+          "number.of.species.LL"
+        )
+      )
+    )
+  
+  preds <- preds %>%
+    mutate(metric = factor(metric, levels = levels(raw$metric))) %>%
+    left_join(
+      r2_labels %>% filter(ClimateVar == climate_var),
+      by = c("metric" = "Metric")
+    )
+  
+  ggplot(preds, aes(x = .data[[climate_var]], y = fit)) +
+    geom_line(aes(linetype = signif), color = "black") +
+    geom_ribbon(
+      aes(ymin = lower, ymax = upper),
+      fill = "gray80", alpha = 0.4
+    ) +
+    geom_point(
+      data = raw,
+      aes(
+        x = .data[[climate_var]],
+        y = value,
+        color = Site,
+        shape = SampleRound
+      ),
+      inherit.aes = FALSE,
+      alpha = 0.6
+    ) +
+    scale_linetype_manual(
+      values = c(significant = "solid", ns = "dashed"),
+      guide = "none"
+    ) +
+    geom_text(
+      data = preds,
+      aes(x = -Inf, y = Inf, label = r2_text),
+      hjust = -0.05, vjust = 1.1,
+      size = 3,
+      inherit.aes = FALSE
+    ) +
+    facet_wrap(
+      ~ metric,
+      nrow = 2,
+      scales = "free_y",
+      labeller = labeller(metric = metric_labels)
+    ) +
+    theme_minimal(base_size = 14) +
+    labs(
+      x = climate_var,
+      y = "Predicted community resistance metric",
+      color = "Site"
+    ) +
+    guides(shape = "none")
+}
+
 predict_metric <- function(mod, climate_var, values) {
   new_data <- data.frame(x = values)
   colnames(new_data) <- climate_var
