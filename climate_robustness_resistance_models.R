@@ -24,148 +24,254 @@ setwd(file.path(local.path, "extinction-cascades"))
 load("analysis/network/saved/corMets_PlantPollinator_YearSR.Rdata")
 
 ## *******************************************************************
-# ---- TCM Robustness Models ----
+# ---- TCM Robustness Models (one model per scenario) ----
 ## *******************************************************************
+
 tcm_climate <- robustness_results %>%
   left_join(climate, by = c("Site", "Year", "SampleRound"))
 
-mod_tcm <- lmer(
-  Robustness ~
-    scale(APi) +
-    scale(WindowTmeanAnom) +
-    scenario +
-    (1 | Site) +
-    (1 | Year),
-  data = tcm_climate
-)
+# TCM scenarios
+tcm_scenarios <- c("abundance_low", "abundance_high", "degree_low", "degree_high")
 
-summary(mod_tcm)
-vif(mod_tcm)
-r2(mod_tcm)
+# Fit one model per TCM scenario
+tcm_models <- lapply(tcm_scenarios, function(s) {
+  dat <- filter(tcm_climate, scenario == s)
+  lmer(
+    Robustness ~
+      scale(APi) +
+      scale(WindowTmeanAnom) +
+      # (1 | Year) +
+      (1 | Site),
+    data = dat
+  )
+})
 
-## ---- Predictions ----
-tcm_preds_api <- ggpredict(
-  mod_tcm,
-  terms = c("APi [all]", "scenario")
-)
+names(tcm_models) <- tcm_scenarios
 
-tcm_preds_anom <- ggpredict(
-  mod_tcm,
-  terms = c("WindowTmeanAnom [all]", "scenario")
-)
+# Summaries and diagnostics
+lapply(tcm_scenarios, function(s) {
+  cat("\n\n============================\n")
+  cat("TCM scenario:", s, "\n")
+  cat("============================\n")
+  print(summary(tcm_models[[s]]))
+  cat("\nVIF:\n")
+  print(vif(tcm_models[[s]]))
+  cat("\nR2:\n")
+  print(r2(tcm_models[[s]]))
+})
 
-## ---- Plots ----
-p_tcm_api <- ggplot(tcm_preds_api,
-                    aes(x = x, y = predicted,
-                        color = group, fill = group)) +
-  geom_line(linewidth = 1, linetype = "solid") +
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high),
-              alpha = 0.2, color = NA) +
-  theme_minimal() +
-  labs(
-    x = "Antecedent Precipitation Index",
-    y = "TCM Robustness",
-    color = "Extinction scenario",
-    fill = "Extinction scenario"
+## ---- Extract R2 and p-values per scenario x climate variable ----
+tcm_stats <- lapply(tcm_scenarios, function(s) {
+  mod     <- tcm_models[[s]]
+  r2_vals <- r2(mod)
+  coefs   <- broom.mixed::tidy(mod, effects = "fixed")
+
+  p_api  <- coefs %>% filter(term == "scale(APi)")             %>% pull(p.value)
+  p_anom <- coefs %>% filter(term == "scale(WindowTmeanAnom)") %>% pull(p.value)
+
+  data.frame(
+    scenario       = s,
+    Marginal_R2    = round(r2_vals$R2_marginal,    2),
+    Conditional_R2 = round(r2_vals$R2_conditional, 2),
+    p_APi          = p_api,
+    p_Anom         = p_anom
+  )
+}) %>%
+  bind_rows() %>%
+  mutate(
+    # Legend label: scenario name + both R² values
+    legend_label = paste0(
+      scenario,
+      "\n  R²m = ", Marginal_R2,
+      ", R²c = ", Conditional_R2
+    )
   )
 
-p_tcm_api <- p_tcm_api +
-  annotate("text",
-           x = Inf, y = Inf,
-           label = "Marginal R² = 0.83\nConditional R² = 0.89",
-           hjust = 1.1, vjust = 1.5,
-           size = 3.5)
+## ---- Predictions per scenario ----
+predict_tcm <- function(s, climate_var) {
+  ggpredict(tcm_models[[s]], terms = paste0(climate_var, " [all]")) %>%
+    as.data.frame() %>%
+    mutate(scenario = s, climate_var = climate_var)
+}
 
-p_tcm_anom <- ggplot(tcm_preds_anom,
-                     aes(x = x, y = predicted,
-                         color = group, fill = group)) +
-  geom_line(linewidth = 1, linetype = "dashed") +
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high),
-              alpha = 0.2, color = NA) +
-  theme_minimal() +
-  labs(
-    x = "Seasonal Temperature Anomaly",
-    y = NULL,
-    color = "Extinction scenario",
-    fill = "Extinction scenario"
+tcm_preds <- bind_rows(
+  lapply(tcm_scenarios, predict_tcm, climate_var = "APi"),
+  lapply(tcm_scenarios, predict_tcm, climate_var = "WindowTmeanAnom")
+) %>%
+  left_join(
+    tcm_stats %>% select(scenario, legend_label, p_APi, p_Anom),
+    by = "scenario"
+  ) %>%
+  mutate(
+    # Significance flag per row based on which climate variable this prediction is for
+    sig = case_when(
+      climate_var == "APi"              & p_APi  < 0.05 ~ "significant",
+      climate_var == "WindowTmeanAnom"  & p_Anom < 0.05 ~ "significant",
+      TRUE ~ "ns"
+    ),
+    climate_var = factor(
+      climate_var,
+      levels = c("APi", "WindowTmeanAnom"),
+      labels = c("Antecedent Precipitation Index", "Seasonal Temperature Anomaly")
+    ),
+    # Order legend by scenario; label carries R² info
+    legend_label = factor(legend_label, levels = tcm_stats$legend_label)
   )
 
-(p_tcm_api | p_tcm_anom) +
-  plot_layout(guides = "collect") &
-  theme(legend.position = "right")
+## ---- Plot: facet_wrap(~ climate_var), lines colored by scenario ----
+p_tcm <- ggplot(tcm_preds, aes(x = x, y = predicted,
+                                color = legend_label,
+                                fill  = legend_label)) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high),
+              alpha = 0.15, color = NA) +
+  geom_line(aes(linetype = sig), linewidth = 1) +
+  scale_linetype_manual(
+    values = c(significant = "solid", ns = "dashed"),
+    guide  = "none"
+  ) +
+  facet_wrap(~ climate_var, scales = "free_x") +
+  theme_minimal(base_size = 13) +
+  labs(
+    x      = NULL,
+    y      = "TCM Robustness",
+    color  = "Extinction ordering",
+    fill   = "Extinction ordering"
+  ) +
+  theme(
+    strip.text       = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    legend.text      = element_text(size = 9),
+    legend.key.height = unit(1.2, "lines")
+  )
 
 ggsave(
-  "analysis/network/figures/TCM_Robustness_APi_WindowTmeanAnom.pdf",
-  width = 12, height = 4
+  "analysis/network/figures/TCM_Robustness_by_climate.pdf",
+  p_tcm,
+  width = 11, height = 5
 )
 
 ## *******************************************************************
-# ---- SCM Robustness Models ----
+# ---- SCM Robustness Models (one model per scenario) ----
 ## *******************************************************************
+
 scm_climate <- scm_results %>%
   left_join(climate, by = c("Site", "Year", "SampleRound"))
 
-mod_scm <- lmer(
-  SCM_Robustness ~
-    scale(APi) * scenario +
-    scale(WindowTmeanAnom) * scenario +
-    (1 | Site) +
-    (1 | Year),
-  data = scm_climate
-)
+# SCM scenarios
+scm_scenarios <- c("scm_random_plant", "scm_dominant_plant")
 
-summary(mod_scm)
-vif(mod_scm)
-r2(mod_scm)
+# Fit one model per SCM scenario
+scm_models <- lapply(scm_scenarios, function(s) {
+  dat <- filter(scm_climate, scenario == s)
+  lmer(
+    SCM_Robustness ~
+      scale(APi) +
+      scale(WindowTmeanAnom) +
+      (1 | Year) +
+      (1 | Site),
+    data = dat
+  )
+})
 
-## ---- Predictions ----
-scm_preds_api <- ggpredict(
-  mod_scm,
-  terms = c("APi [all]", "scenario")
-)
+names(scm_models) <- scm_scenarios
 
-scm_preds_anom <- ggpredict(
-  mod_scm,
-  terms = c("WindowTmeanAnom [all]", "scenario")
-)
+# Summaries and diagnostics
+lapply(scm_scenarios, function(s) {
+  cat("\n\n============================\n")
+  cat("SCM scenario:", s, "\n")
+  cat("============================\n")
+  print(summary(scm_models[[s]]))
+  cat("\nVIF:\n")
+  print(vif(scm_models[[s]]))
+  cat("\nR2:\n")
+  print(r2(scm_models[[s]]))
+})
 
-## ---- Plots ----
-p_scm_api <- ggplot(scm_preds_api,
-                    aes(x = x, y = predicted,
-                        color = group, fill = group)) +
-  geom_line(linewidth = 1) +
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high),
-              alpha = 0.2, color = NA) +
-  theme_minimal() +
-  labs(
-    x = "Antecedent Precipitation Index",
-    y = "SCM Robustness",
-    color = "SCM scenario",
-    fill = "SCM scenario"
+## ---- Extract R2 and p-values per scenario x climate variable ----
+scm_stats <- lapply(scm_scenarios, function(s) {
+  mod     <- scm_models[[s]]
+  r2_vals <- r2(mod)
+  coefs   <- broom.mixed::tidy(mod, effects = "fixed")
+
+  p_api  <- coefs %>% filter(term == "scale(APi)")             %>% pull(p.value)
+  p_anom <- coefs %>% filter(term == "scale(WindowTmeanAnom)") %>% pull(p.value)
+
+  data.frame(
+    scenario       = s,
+    Marginal_R2    = round(r2_vals$R2_marginal,    2),
+    Conditional_R2 = round(r2_vals$R2_conditional, 2),
+    p_APi          = p_api,
+    p_Anom         = p_anom
+  )
+}) %>%
+  bind_rows() %>%
+  mutate(
+    legend_label = paste0(
+      scenario,
+      "\n  R²m = ", Marginal_R2,
+      ", R²c = ", Conditional_R2
+    )
   )
 
-p_scm_anom <- ggplot(scm_preds_anom,
-                     aes(x = x, y = predicted,
-                         color = group, fill = group)) +
-  geom_line(linewidth = 1) +
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high),
-              alpha = 0.2, color = NA) +
-  theme_minimal() +
-  labs(
-    x = "Seasonal Temperature Anomaly",
-    y = NULL
+## ---- Predictions per scenario ----
+predict_scm <- function(s, climate_var) {
+  ggpredict(scm_models[[s]], terms = paste0(climate_var, " [all]")) %>%
+    as.data.frame() %>%
+    mutate(scenario = s, climate_var = climate_var)
+}
+
+scm_preds <- bind_rows(
+  lapply(scm_scenarios, predict_scm, climate_var = "APi"),
+  lapply(scm_scenarios, predict_scm, climate_var = "WindowTmeanAnom")
+) %>%
+  left_join(
+    scm_stats %>% select(scenario, legend_label, p_APi, p_Anom),
+    by = "scenario"
+  ) %>%
+  mutate(
+    sig = case_when(
+      climate_var == "APi"             & p_APi  < 0.05 ~ "significant",
+      climate_var == "WindowTmeanAnom" & p_Anom < 0.05 ~ "significant",
+      TRUE ~ "ns"
+    ),
+    climate_var = factor(
+      climate_var,
+      levels = c("APi", "WindowTmeanAnom"),
+      labels = c("Antecedent Precipitation Index", "Seasonal Temperature Anomaly")
+    ),
+    legend_label = factor(legend_label, levels = scm_stats$legend_label)
   )
 
-(p_scm_api | p_scm_anom) +
-  plot_layout(guides = "collect") +
-  plot_annotation(
-    caption = "Marginal R² = 0.26; Conditional R² = 0.78"
-  ) &
-  theme(legend.position = "right")
+## ---- Plot: facet_wrap(~ climate_var), lines colored by scenario ----
+p_scm <- ggplot(scm_preds, aes(x = x, y = predicted,
+                                color = legend_label,
+                                fill  = legend_label)) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high),
+              alpha = 0.15, color = NA) +
+  geom_line(aes(linetype = sig), linewidth = 1) +
+  scale_linetype_manual(
+    values = c(significant = "solid", ns = "dashed"),
+    guide  = "none"
+  ) +
+  facet_wrap(~ climate_var, scales = "free_x") +
+  theme_minimal(base_size = 13) +
+  labs(
+    x     = NULL,
+    y     = "SCM Robustness",
+    color = "Extinction ordering",
+    fill  = "Extinction ordering"
+  ) +
+  theme(
+    strip.text        = element_text(face = "bold"),
+    panel.grid.minor  = element_blank(),
+    legend.text       = element_text(size = 9),
+    legend.key.height = unit(1.2, "lines")
+  )
 
 ggsave(
-  "analysis/network/figures/SCM_Robustness_APi_WindowTmeanAnom.pdf",
-  width = 12, height = 4
+  "analysis/network/figures/SCM_Robustness_by_climate.pdf",
+  p_scm,
+  width = 11, height = 5
 )
 
 ## *******************************************************************
@@ -247,7 +353,7 @@ results_all <- bind_rows(
 extract_r2 <- function(mods, climate_var) {
   lapply(names(mods), function(name) {
     r2_vals <- performance::r2(mods[[name]])
-    
+
     data.frame(
       Metric = name,
       ClimateVar = climate_var,
@@ -280,13 +386,13 @@ r2_labels <- r2_all %>%
 
 
 plot_climate_effects <- function(mods, climate_var, data) {
-  
+
   climate_range <- seq(
     min(data[[climate_var]], na.rm = TRUE),
     max(data[[climate_var]], na.rm = TRUE),
     length.out = 100
   )
-  
+
   preds <- lapply(names(mods), function(m) {
     predict_metric(mods[[m]], climate_var, climate_range) %>%
       mutate(metric = m)
@@ -297,7 +403,7 @@ plot_climate_effects <- function(mods, climate_var, data) {
         filter(ClimateVar == climate_var),
       by = c("metric" = "Metric")
     )
-  
+
   raw <- data %>%
     pivot_longer(
       cols = all_of(metrics),
@@ -313,7 +419,7 @@ plot_climate_effects <- function(mods, climate_var, data) {
           "FunRedundancy.Pols",
           "mean.number.of.links.HL",
           "number.of.species.HL",
-          
+
           # Plants
           "functional.complementarity.LL",
           "FunRedundancy.Plants",
@@ -322,14 +428,14 @@ plot_climate_effects <- function(mods, climate_var, data) {
         )
       )
     )
-  
+
   preds <- preds %>%
     mutate(metric = factor(metric, levels = levels(raw$metric))) %>%
     left_join(
       r2_labels %>% filter(ClimateVar == climate_var),
       by = c("metric" = "Metric")
     )
-  
+
   ggplot(preds, aes(x = .data[[climate_var]], y = fit)) +
     geom_line(aes(linetype = signif), color = "black") +
     geom_ribbon(
@@ -376,15 +482,15 @@ plot_climate_effects <- function(mods, climate_var, data) {
 predict_metric <- function(mod, climate_var, values) {
   new_data <- data.frame(x = values)
   colnames(new_data) <- climate_var
-  
+
   mm <- model.matrix(
     as.formula(paste0("~ scale(", climate_var, ")")),
     new_data
   )
-  
+
   fit <- mm %*% fixef(mod)
   se  <- sqrt(diag(mm %*% vcov(mod) %*% t(mm)))
-  
+
   new_data %>%
     mutate(
       fit = as.vector(fit),
