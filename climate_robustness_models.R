@@ -19,6 +19,7 @@ load("analysis/network/robustness_metrics/YearSR_robustness_climate.Rdata")
 
 setwd(file.path(local.path, "skyIslands_saved"))
 climate <- read.csv("data/relational/original/climate.csv")
+geography <- read.csv("data/relational/original/geography.csv")
 
 setwd(file.path(local.path, "extinction-cascades"))
 load("analysis/network/saved/corMets_PlantPollinator_YearSR.Rdata")
@@ -40,7 +41,7 @@ tcm_models <- lapply(tcm_scenarios, function(s) {
     Robustness ~
       scale(APi) +
       scale(WindowTmeanAnom) +
-      # (1 | Year) +
+      (1 | Year) +
       (1 | Site),
     data = dat
   )
@@ -283,6 +284,15 @@ ggsave(
 # perturbation, so they reveal the structural landscape that robustness
 # results emerge from. They are NOT a direct measure of resistance.
 ## *******************************************************************
+## ---- Order sites by latitude ----
+site_order <- geography %>%
+  group_by(Site) %>%
+  summarize(
+    Lat = mean(Lat, na.rm = TRUE)
+  ) %>%
+  arrange(desc(Lat)) %>%   # north -> south
+  pull(Site)
+
 cor.dats <- cor.dats %>%
   separate(
     Site,
@@ -297,7 +307,7 @@ cor.dats <- cor.dats %>%
     by = c("Site", "Year", "SampleRound")
   ) %>%
   mutate(
-    Site = factor(Site),
+    Site = factor(Site, levels = site_order),
     Year = factor(Year),
     SampleRound = factor(SampleRound)
   )
@@ -480,7 +490,7 @@ plot_structural_effects <- function(mods, climate_var, data) {
     labs(
       x = climate_var,
       y = "Network structural property",
-      color = "Site"
+      color = "Site (north to south)"
     ) +
     guides(shape = "none")
 }
