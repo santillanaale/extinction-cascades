@@ -10,40 +10,60 @@ daily_normals <- read_csv(daily_normals_file,
 
 setwd("../extinction-cascades/")
 season_climate <- read.csv("season_climate.csv")
+season_windows <- read_csv("season_windows.csv")
 
 ## *******************************************************************
 ## Calculate seasonal climatology
 ## *******************************************************************
 daily_normals <- daily_normals %>%
   mutate(
-    Month = month(as.Date(paste0(Date, "-2001"),
-                          format = "%B-%d-%Y"))
-  ) %>%
-  filter(Month >= 5)
+    NormalDate = as.Date(
+      paste0(Date, "-2000"),
+      format = "%B-%d-%Y"
+    )
+  )
+
+season_windows <- season_windows %>%
+  mutate(
+    NormalStart =
+      as.Date("2000-05-01"),
+    NormalEnd =
+      as.Date(
+        paste0(
+          "2000-",
+          format(SeasonEnd, "%m-%d")
+        )
+      )
+  )
 
 climatology <-
   daily_normals %>%
-  group_by(Name) %>%
+  rename(
+    Site = Name
+  ) %>%
+  inner_join(
+    season_windows,
+    by="Site"
+  ) %>%
+  filter(
+    NormalDate >= NormalStart,
+    NormalDate <= NormalEnd
+  ) %>%
+  group_by(
+    Site,
+    Year
+  ) %>%
   summarise(
-    
     MeanTmean =
       mean(`tmean (degrees C)`),
-    
     MeanTmax =
       mean(`tmax (degrees C)`),
-    
     MeanTmin =
       mean(`tmin (degrees C)`),
-    
-    MeanVPD =
-      mean(`vpdmax (hPa)`),
-    
     CumPrecip =
       sum(`ppt (mm)`),
-    
-    # CumSolsloped =
-    #   sum(`solsloped (MJ/m^2)`),
-    
+    MeanVPD =
+      mean(`vpdmax (hPa)`),
     .groups="drop"
   )
 
@@ -54,39 +74,23 @@ season_climate <-
   season_climate %>%
   left_join(
     climatology,
-    by=c("Site"="Name"),
+    by=c("Site","Year"),
     suffix=c("","_normal")
   )
 
 ## *******************************************************************
-## Standardize
+## Compute Anomalies
 ## *******************************************************************
 season_climate <-
   season_climate %>%
   group_by(Site) %>%
   mutate(
-    
-    MeanTmean_z =
-      (MeanTmean-MeanTmean_normal)/
-      sd(MeanTmean),
-    
-    MeanTmax_z =
-      (MeanTmax-MeanTmax_normal)/
-      sd(MeanTmax),
-    
-    MeanTmin_z =
-      (MeanTmin-MeanTmin_normal)/
-      sd(MeanTmin),
-    
-    CumPrecip_z =
-      (CumPrecip-CumPrecip_normal)/
-      sd(CumPrecip),
-    
-    MeanVPD_z =
-      (MeanVPD-MeanVPD_normal)/
-      sd(MeanVPD)
-    
+    MeanTmean_anom = MeanTmean - MeanTmean_normal,
+    MeanTmax_anom  = MeanTmax  - MeanTmax_normal,
+    MeanTmin_anom  = MeanTmin  - MeanTmin_normal,
+    CumPrecip_anom = CumPrecip - CumPrecip_normal,
+    MeanVPD_anom   = MeanVPD   - MeanVPD_normal
   ) %>%
   ungroup()
 
-write_csv(season_climate,"season_climate_z.csv")
+write_csv(season_climate,"season_climate.csv")

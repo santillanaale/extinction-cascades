@@ -171,5 +171,5 @@ season_climate <-
   # left_join(season_solar)
 
 setwd("../extinction-cascades/")
-write.csv(season_climate, file =
-                              "season_climate.csv", row.names=FALSE)
+write.csv(season_climate, file = "season_climate.csv", row.names=FALSE)
+write.csv(season_windows,file = "season_windows.csv", row.names=FALSE)

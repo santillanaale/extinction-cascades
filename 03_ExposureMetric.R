@@ -1,19 +1,16 @@
 library(tidyverse)
 library(lubridate)
 library(ggplot2)
-season_climate_z <- read.csv("season_climate_z.csv")
-
-season_climate_z <- read_csv("season_climate_z.csv") %>%
+season_climate <- read_csv("season_climate.csv") %>%
   filter(!Site %in% c("SS", "UK", "VC"))
 
-climate_matrix <-
-  season_climate_z %>%
+climate_matrix <- season_climate %>%
   select(
-    MeanTmean_z,
-    MeanTmax_z,
-    MeanTmin_z,
-    CumPrecip_z,
-    MeanVPD_z
+    MeanTmean_anom,
+    MeanTmax_anom,
+    MeanTmin_anom,
+    CumPrecip_anom,
+    MeanVPD_anom
   )
 
 head(climate_matrix)
@@ -22,8 +19,8 @@ head(climate_matrix)
 pca <-
   prcomp(
     climate_matrix,
-    center = FALSE,
-    scale. = FALSE
+    center = TRUE,
+    scale. = TRUE
   )
 
 summary(pca)
@@ -32,7 +29,7 @@ pca$rotation
 scores <- as.data.frame(pca$x)
 
 exposure <- bind_cols(
-  season_climate_z,
+  season_climate,
   scores
 )
 
@@ -45,13 +42,13 @@ ggplot(exposure,
   geom_point(size = 3) +
   stat_ellipse()
 
-# Euclidean distance: How large was the departure?
-exposure$ClimateDistance <-
-  sqrt(
-    exposure$MeanTmean_z^2 +
-      exposure$MeanTmax_z^2 +
-      exposure$MeanTmin_z^2 +
-      exposure$CumPrecip_z^2 +
-      exposure$MeanVPD_z^2
-  )
+# # Euclidean distance: How large was the departure?
+# exposure$ClimateDistance <-
+#   sqrt(
+#     exposure$MeanTmean_z^2 +
+#       exposure$MeanTmax_z^2 +
+#       exposure$MeanTmin_z^2 +
+#       exposure$CumPrecip_z^2 +
+#       exposure$MeanVPD_z^2
+#   )
 
