@@ -64,7 +64,7 @@ scenarios <- tibble(
 )
 
 ## ---- Robustness loop (Site x Year x SampleRound x scenario) ----
-robustness_results <- map_dfr(seq_len(nrow(scenarios)), function(s) {
+tcm_results <- map_dfr(seq_len(nrow(scenarios)), function(s) {
   
   scenario <- scenarios[s, ]
   message("Running TCM scenario: ", scenario$scenario)
@@ -144,14 +144,14 @@ climate <- read.csv("data/relational/original/climate.csv")
 setwd("~/")
 setwd(file.path(local.path, "extinction-cascades"))
 
-tcm_climate <- robustness_results %>%
+tcm_climate <- tcm_results %>%
   left_join(climate, by = c("Site", "Year", "SampleRound"))
 
 scm_climate <- scm_results %>%
   left_join(climate, by = c("Site", "Year", "SampleRound"))
 
 save(
-  robustness_results,
+  tcm_results,
   scm_results,
   tcm_climate,
   scm_climate,

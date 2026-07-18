@@ -9,11 +9,11 @@ daily_normals <- read_csv(daily_normals_file,
   )
 
 setwd("../extinction-cascades/")
-season_climate <- read.csv("season_climate.csv")
-season_windows <- read_csv("season_windows.csv")
+sample_climate <- read.csv("sample_climate.csv")
+sample_windows <- read_csv("sample_windows.csv")
 
 ## *******************************************************************
-## Calculate seasonal climatology
+## Calculate sample climatology
 ## *******************************************************************
 daily_normals <- daily_normals %>%
   mutate(
@@ -23,27 +23,29 @@ daily_normals <- daily_normals %>%
     )
   )
 
-season_windows <- season_windows %>%
+sample_windows <- sample_windows %>%
   mutate(
-    NormalStart =
-      as.Date("2000-05-01"),
-    NormalEnd =
-      as.Date(
-        paste0(
-          "2000-",
-          format(SeasonEnd, "%m-%d")
-        )
+    NormalStart = as.Date(
+      paste0(
+        "2000-",
+        format(WindowStart, "%m-%d")
       )
+    ),
+    NormalEnd = as.Date(
+      paste0(
+        "2000-",
+        format(EndDate, "%m-%d")
+      )
+    )
   )
 
 climatology <-
   daily_normals %>%
-  rename(
-    Site = Name
-  ) %>%
+  rename(Site = Name) %>%
   inner_join(
-    season_windows,
-    by="Site"
+    sample_windows,
+    by = "Site",
+    relationship = "many-to-many"
   ) %>%
   filter(
     NormalDate >= NormalStart,
@@ -51,46 +53,40 @@ climatology <-
   ) %>%
   group_by(
     Site,
-    Year
+    Year,
+    SampleRound
   ) %>%
   summarise(
-    MeanTmean =
-      mean(`tmean (degrees C)`),
-    MeanTmax =
-      mean(`tmax (degrees C)`),
-    MeanTmin =
-      mean(`tmin (degrees C)`),
-    CumPrecip =
-      sum(`ppt (mm)`),
-    MeanVPD =
-      mean(`vpdmax (hPa)`),
-    .groups="drop"
+    MeanTmean = mean(`tmean (degrees C)`),
+    MeanTmax  = mean(`tmax (degrees C)`),
+    MeanTmin  = mean(`tmin (degrees C)`),
+    CumPrecip = sum(`ppt (mm)`),
+    MeanVPD   = mean(`vpdmax (hPa)`),
+    .groups = "drop"
   )
 
 ## *******************************************************************
 ## Join with observed data
 ## *******************************************************************
-season_climate <-
-  season_climate %>%
+sample_climate <-
+  sample_climate %>%
   left_join(
     climatology,
-    by=c("Site","Year"),
-    suffix=c("","_normal")
+    by = c("Site","Year","SampleRound"),
+    suffix = c("", "_normal")
   )
 
 ## *******************************************************************
 ## Compute Anomalies
 ## *******************************************************************
-season_climate <-
-  season_climate %>%
-  group_by(Site) %>%
+sample_climate <-
+  sample_climate %>%
   mutate(
     MeanTmean_anom = MeanTmean - MeanTmean_normal,
     MeanTmax_anom  = MeanTmax  - MeanTmax_normal,
     MeanTmin_anom  = MeanTmin  - MeanTmin_normal,
     CumPrecip_anom = CumPrecip - CumPrecip_normal,
     MeanVPD_anom   = MeanVPD   - MeanVPD_normal
-  ) %>%
-  ungroup()
+  )
 
-write_csv(season_climate,"season_climate.csv")
+write_csv(sample_climate, "sample_climate.csv")
