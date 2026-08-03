@@ -102,6 +102,8 @@ write_csv(
   "Exposure.csv"
 )
 
+write.csv(exposure,"exposure.csv",row.names = FALSE)
+
 ## ===============================================================
 ## Visualization
 ## ===============================================================
