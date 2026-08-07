@@ -45,7 +45,8 @@ fit_models <- function(response, data, climate_formula){
     form <- as.formula(
       paste0(y, " ~ ", climate_formula, " + (1 | Year) + (1 | Site)")
     )
-    lmer(form, data = data, REML = FALSE)
+    lmer(form, data = data, REML = FALSE,
+         control = lmerControl(optimizer = "bobyqa"))
   })
   names(mods) <- response
   mods
@@ -54,7 +55,7 @@ fit_models <- function(response, data, climate_formula){
 ## Fit one model per scenario (filters data to scenario == s, fits a
 ## single response variable). Used for TCM/SCM robustness models.
 fit_scenario_models <- function(response, data, scenarios,
-                                 climate_formula, scenario_col = "scenario"){
+                                climate_formula, scenario_col = "scenario"){
   mods <- lapply(scenarios, function(s){
     dat <- filter(data, .data[[scenario_col]] == s)
     fit_models(response, dat, climate_formula)[[1]]
@@ -122,8 +123,8 @@ predict_all <- function(mods, climate_vars){
 ## TCM/SCM style plot: facet by climate_var, color/legend by scenario
 ## (legend label carries R2), no raw data overlay.
 plot_scenario_climate <- function(mods, climate_vars, var_labels, y_lab, out_file,
-                                   width = 11, height = 5){
-
+                                  width = 11, height = 5){
+  
   stats <- get_stats_all(mods, climate_vars) %>%
     mutate(
       legend_label = paste0(
@@ -131,7 +132,7 @@ plot_scenario_climate <- function(mods, climate_vars, var_labels, y_lab, out_fil
         ", R²c = ", round(Conditional_R2, 2)
       )
     )
-
+  
   preds <- predict_all(mods, climate_vars) %>%
     left_join(
       stats %>% select(id, climate_var, legend_label, signif),
@@ -141,7 +142,7 @@ plot_scenario_climate <- function(mods, climate_vars, var_labels, y_lab, out_fil
       legend_label = factor(legend_label, levels = unique(stats$legend_label)),
       climate_var  = factor(climate_var, levels = names(var_labels), labels = var_labels)
     )
-
+  
   p <- ggplot(preds, aes(x = x, y = predicted, color = legend_label, fill = legend_label)) +
     geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.15, color = NA) +
     geom_line(aes(linetype = signif), linewidth = 1) +
@@ -155,7 +156,7 @@ plot_scenario_climate <- function(mods, climate_vars, var_labels, y_lab, out_fil
       legend.text       = element_text(size = 9),
       legend.key.height = unit(1.2, "lines")
     )
-
+  
   ggsave(out_file, p, width = width, height = height)
   p
 }
@@ -163,23 +164,23 @@ plot_scenario_climate <- function(mods, climate_vars, var_labels, y_lab, out_fil
 ## Structural-property style plot: facet by metric, one climate_var at a
 ## time, raw data points colored by Site, R2 text annotation per panel.
 plot_metric_climate <- function(mods, climate_var, data, metrics, metric_labels,
-                                 y_lab = "Network structural property", out_file,
-                                 width = 11, height = 8){
-
+                                y_lab = "Network structural property", out_file,
+                                width = 11, height = 8){
+  
   stats <- get_stats_all(mods, climate_var) %>%
     mutate(r2_text = paste0("R²m = ", round(Marginal_R2, 2),
                             "\nR²c = ", round(Conditional_R2, 2)))
-
+  
   preds <- predict_all(mods, climate_var) %>%
     left_join(stats %>% select(id, signif, r2_text), by = "id") %>%
     mutate(id = factor(id, levels = names(metric_labels)))
-
+  
   raw <- data %>%
     pivot_longer(cols = all_of(metrics), names_to = "id", values_to = "value") %>%
     mutate(id = factor(id, levels = names(metric_labels)))
-
+  
   r2_panel <- preds %>% distinct(id, r2_text)
-
+  
   p <- ggplot(preds, aes(x = x, y = predicted)) +
     geom_ribbon(aes(ymin = conf.low, ymax = conf.high), fill = "gray80", alpha = 0.4) +
     geom_line(aes(linetype = signif), color = "black", linewidth = 1) +
@@ -198,7 +199,7 @@ plot_metric_climate <- function(mods, climate_var, data, metrics, metric_labels,
     theme_minimal(base_size = 14) +
     labs(x = climate_var, y = y_lab, color = "Site (north to south)") +
     guides(shape = "none")
-
+  
   ggsave(out_file, p, width = width, height = height)
   p
 }
@@ -372,11 +373,11 @@ model_results <- bind_rows(
   extract_results(tcm_api_models,    "TCM_APi_GDD",   "scenario"),
   extract_results(tcm_pca_models,    "TCM_PCA",       "scenario"),
   extract_results(tcm_pc1gdd_models, "TCM_PC1_GDD",   "scenario"),
-
+  
   extract_results(scm_api_models,    "SCM_APi_GDD",   "scenario"),
   extract_results(scm_pca_models,    "SCM_PCA",       "scenario"),
   extract_results(scm_pc1gdd_models, "SCM_PC1_GDD",   "scenario"),
-
+  
   extract_results(mods_api,    "Network_APi",     "Metric"),
   extract_results(mods_gdd,    "Network_GDD",     "Metric"),
   extract_results(mods_pca,    "Network_PCA",     "Metric"),
@@ -387,11 +388,11 @@ model_r2 <- bind_rows(
   extract_r2(tcm_api_models,    "TCM_APi_GDD",   "scenario"),
   extract_r2(tcm_pca_models,    "TCM_PCA",       "scenario"),
   extract_r2(tcm_pc1gdd_models, "TCM_PC1_GDD",   "scenario"),
-
+  
   extract_r2(scm_api_models,    "SCM_APi_GDD",   "scenario"),
   extract_r2(scm_pca_models,    "SCM_PCA",       "scenario"),
   extract_r2(scm_pc1gdd_models, "SCM_PC1_GDD",   "scenario"),
-
+  
   extract_r2(mods_api,    "Network_APi",     "Metric"),
   extract_r2(mods_gdd,    "Network_GDD",     "Metric"),
   extract_r2(mods_pca,    "Network_PCA",     "Metric"),
@@ -400,3 +401,35 @@ model_r2 <- bind_rows(
 
 write_csv(model_results, "analysis/network/model_fixed_effects.csv")
 write_csv(model_r2, "analysis/network/model_R2.csv")
+
+## *******************************************************************
+# ---- Check for Convergence ----
+## *******************************************************************
+check_convergence <- function(mods, label){
+  msgs <- lapply(mods, function(m) m@optinfo$conv$lme4$messages)
+  tibble(
+    model_set = label,
+    id = names(mods),
+    message = sapply(msgs, function(x) if (is.null(x)) "OK" else paste(x, collapse = " | ")),
+    failed_to_converge = sapply(msgs, function(x) any(grepl("failed to converge", x))),
+    singular = sapply(msgs, function(x) any(grepl("singular", x)))
+  )
+}
+
+convergence_report <- bind_rows(
+  check_convergence(tcm_api_models,    "TCM_APi_GDD"),
+  check_convergence(tcm_pca_models,    "TCM_PCA"),
+  check_convergence(tcm_pc1gdd_models, "TCM_PC1_GDD"),
+  
+  check_convergence(scm_api_models,    "SCM_APi_GDD"),
+  check_convergence(scm_pca_models,    "SCM_PCA"),
+  check_convergence(scm_pc1gdd_models, "SCM_PC1_GDD"),
+  
+  check_convergence(mods_api,    "Network_APi"),
+  check_convergence(mods_gdd,    "Network_GDD"),
+  check_convergence(mods_pca,    "Network_PCA"),
+  check_convergence(mods_pc1gdd, "Network_PC1_GDD")
+)
+
+# Just the real problems (non-convergence, not just singularity)
+convergence_report %>% filter(failed_to_converge)
