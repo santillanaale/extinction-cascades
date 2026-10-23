@@ -1,0 +1,292 @@
+% \documentclass{beamer}
+
+% \usepackage{graphicx}
+% \usepackage{wrapfig}
+
+% \title{Chapter 1 Storyboard: Climate Variability and Network Resistance}
+% \author{Alejandro Santillana}
+% \date{September 15, 2026}
+
+% \begin{document}
+
+% \frame{\titlepage}
+
+% % ------------------------------------------------
+% \begin{frame}{Main Questions}
+% \begin{itemize}
+%     \item How does climate variability (precipitation, temperature/seasonal progression) shape plant-pollinator network structure?
+%     \item Do climate-driven structural changes alter network robustness and community resistance?
+%     \item Does the mechanism of species loss (extinction scenario) mediate climate effects on robustness?
+% \end{itemize}
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Study Motivation}
+% \begin{itemize}
+%     \item Climate variability is a key driver of instability.
+%     \item Plant-pollinator networks are sensitive because interactions depend on species and phenology.
+%     \item Network structure (complementarity, redundancy, generalization, richness) mediates resistance.
+%     \item Loss of interactions triggers cascading extinctions.
+%     \item Robustness is the key metric describing vulnerability to species loss.
+%     \item Sky Island mountain meadows are biodiversity hotspots that provide a natural climate gradient.
+%     \item Climate variability reshapes networks via species turnover, interaction frequency, and phenological shifts.
+% \end{itemize}
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Methods: Climate Predictors}
+% \begin{itemize}
+%     \item 5 years of plant-pollinator networks across 11 Sky Island sites.
+%     \item Climate predictors derived from daily PRISM data.
+%     \item \textbf{APi (Antecedent precipitation):} exponentially weighted cumulative rainfall prior to sampling; proxy for soil moisture and floral resource availability.
+%     \item \textbf{GDD (Growing degree days):} cumulative heat accumulation; proxy for seasonal progression (modeled as a quadratic term to allow mid-season peaks).
+%     \item We fit three parallel sets of models per response: (1) APi + GDD, (2) PC1 (+PC2, for reference), and (3) PC1 + quadratic GDD (``full'' model) --- shown side by side below so we can decide which framework to keep.
+%     \item All models: mixed effects with site and year as random intercepts.
+% \end{itemize}
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Methods: Climate PCA (PC1)}
+% \begin{itemize}
+%     \item \textbf{PC1:} multivariate climate-exposure axis from a PCA of Tmean, Tmax, Tmin, VPD, and precipitation anomalies (57\% of variance).
+%     \item Tmean/Tmax/Tmin/VPD load negatively and precipitation loads weakly positively, so \textbf{high PC1 = cooler/wetter/lower-VPD conditions; low PC1 = warm-dry conditions.}
+%     \item \textbf{PC2} (26\% of variance) was tested alongside PC1 in every model family (network structure, functional diversity, TCM, SCM) and was never a significant predictor (all $p>0.13$); we do not carry it forward.
+% \end{itemize}
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Response Variables}
+% \begin{itemize}
+%     \item \textbf{Network structure (8 metrics):} plant and pollinator complementarity, redundancy, generalization (mean links), and richness, from \texttt{bipartite}.
+%     \item \textbf{Bee functional diversity (3-4 metrics):} functional dispersion, evenness, divergence (and richness) of the bee community.
+%     \item \textbf{TCM robustness:} topological co-extinction; plants removed by abundance or degree, low-to-high or high-to-low (4 scenarios).
+%     \item \textbf{SCM robustness:} stochastic co-extinction; random vs.\ dominant-plant removal (2 scenarios).
+%     \item \textbf{Key distinction:} TCM = deterministic structural collapse; SCM = probabilistic, more ecologically realistic loss.
+% \end{itemize}
+% \end{frame}
+
+% % =================================================
+% % =================================================
+% \begin{frame}{Section 1: Network Structure}
+% \begin{itemize}
+%     \item Response: 8 structural metrics (plant/pollinator complementarity, redundancy, generalization, richness).
+%     \item Model: \texttt{metric $\sim$ climate + (1|Year) + (1|Site)}, one model per climate specification.
+%     \item Following slides show APi, GDD, PC1(+PC2), and the full PC1+GDD model in turn.
+% \end{itemize}
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Network Structure vs.\ Precipitation (APi)}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=0.8\linewidth]{figures/NetworkStructure_APi.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Linear mixed models regress each of 8 structural metrics on antecedent precipitation (APi), with site and year as random effects. \\
+% \textbf{Result:} Pollinator redundancy ($p=0.049$) and plant generalization ($p=0.019$) decline significantly with more precipitation; the other six metrics are unrelated to APi (all $p>0.08$).
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Network Structure vs.\ Seasonal Progression (GDD)}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=0.8\linewidth]{figures/NetworkStructure_GDD.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Same model structure, with growing degree days (GDD) as the sole (linear) predictor. \\
+% \textbf{Result:} Pollinator richness ($p=0.007$) and plant generalization ($p=0.031$) decline significantly later in the season; the remaining six metrics show no relationship (all $p>0.08$).
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Network Structure vs.\ Climate PCA (PC1, PC2)}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=0.8\linewidth]{figures/NetworkStructure_PC1.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Same models with PC1 and PC2 as joint predictors, plotted against PC1 (high = cool/wet, low = warm/dry). \\
+% \textbf{Result:} Pollinator complementarity ($p=0.020$), plant complementarity ($p=0.024$), plant redundancy ($p=0.034$) decline as conditions get cooler/wetter; PC2 unrelated to any metric.
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Network Structure: Full Model (PC1, holding GDD)}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=0.8\linewidth]{figures/NetworkStructure_PC1_adjGDD.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Full model with PC1 and a quadratic GDD term, plotted against PC1 (high = cool/wet, low = warm/dry). \\
+% \textbf{Result:} Pollinator complementarity, pollinator redundancy, plant complementarity, and plant redundancy all decline as conditions get cooler/wetter (all $p<0.05$) once season is accounted for --- stronger than PC1 alone, and consistent with the APi results.
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Network Structure: Full Model (GDD, holding PC1)}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=0.8\linewidth]{figures/NetworkStructure_GDD_adjPC1.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Same full model, plotted against the quadratic GDD term (seasonal progression), holding PC1 constant. \\
+% \textbf{Result:} Pollinator complementarity, pollinator richness, plant generalization, and plant richness show significant curvature or decline across the season, while redundancy metrics do not.
+% \end{frame}
+
+% % =================================================
+% \begin{frame}{Section 2: Bee Functional Diversity}
+% \begin{itemize}
+%     \item Response: bee community functional dispersion, evenness, and divergence (SiteYearSR level).
+%     \item Same model structure and climate specifications as the network structure section.
+% \end{itemize}
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Functional Diversity vs.\ Precipitation (APi)}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=0.95\linewidth]{figures/FuncDiv_APi.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Same mixed-model approach applied to bee functional dispersion, evenness, and divergence, versus APi. \\
+% \textbf{Result:} None of the three functional-diversity metrics are significantly related to precipitation (all $p>0.22$).
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Functional Diversity vs.\ Seasonal Progression (GDD)}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=0.95\linewidth]{figures/FuncDiv_GDD.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Same models, with GDD as the sole predictor. \\
+% \textbf{Result:} Functional evenness ($p=0.019$) and divergence ($p=0.007$) decline significantly later in the season; dispersion does not ($p=0.84$).
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Functional Diversity vs.\ Climate PCA (PC1, PC2)}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=0.95\linewidth]{figures/FuncDiv_PC1.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Same models with PC1 and PC2 as joint predictors, plotted against PC1. \\
+% \textbf{Result:} None of the three functional-diversity metrics are significantly related to PC1 or PC2 (all $p>0.07$).
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Functional Diversity: Full Model (GDD, holding PC1)}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=0.95\linewidth]{figures/FuncDiv_GDD_adjPC1.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Full model (PC1 + quadratic GDD), plotted against GDD. \\
+% \textbf{Result:} Functional evenness ($p=0.027$) and divergence ($p=0.005$) still decline significantly across the season after accounting for PC1; dispersion remains unrelated to climate.
+% \end{frame}
+
+% % =================================================
+% \begin{frame}{Coextinction Models: Measuring Robustness}
+% \begin{itemize}
+%     \item \textbf{Topological Coextinction Model (TCM):} species go extinct when all partners are lost; deterministic, structural vulnerability. Four scenarios: remove rare/dominant species first (abundance), or specialist/generalist species first (degree).
+%     \item \textbf{Stochastic Coextinction Model (SCM):} extinction occurs probabilistically based on interaction loss; more ecologically realistic. Two scenarios: random vs.\ dominant-plant removal.
+%     \item \textbf{Why both, and why all 3 climate specifications?} To test whether climate effects on robustness depend on disturbance assumptions or on how climate is parameterized.
+% \end{itemize}
+% \end{frame}
+
+% % =================================================
+% \begin{frame}{Section 3: TCM Robustness}
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{TCM Robustness vs.\ Precipitation \& GDD}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=1\linewidth]{figures/TCM_Robustness_by_climate.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} \texttt{Robustness $\sim$ APi + GDD + (1|Year) + (1|Site)}, fit separately for each of 4 extinction scenarios. \\
+% \textbf{Result:} No scenario shows a significant climate effect (all $p>0.09$), though robustness trends slightly higher under wetter/warmer conditions in every case. Baseline robustness is far higher when rare/specialist species are removed first ($\sim$0.65-0.75) than when dominant/generalist species are removed first ($\sim$0.25-0.35).
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{TCM Robustness vs.\ Climate PCA}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=1\linewidth]{figures/TCM_Robustness_by_PCAclimate.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Same TCM models using PC1 and PC2 as joint predictors. \\
+% \textbf{Result:} No scenario shows a significant relationship with either PC1 or PC2 (all $p>0.15$).
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{TCM Robustness: Full Model (PC1 + GDD)}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=1\linewidth]{figures/TCM_Robustness_by_PC1GDD.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Full TCM model with PC1 and a quadratic GDD term. \\
+% \textbf{Result:} Robustness under the two ``remove dominant/generalist first'' scenarios increases significantly with seasonal progression (abundance\_high $p=0.040$; degree\_high $p=0.014$), peaking mid-to-late season, while the ``remove rare/specialist first'' scenarios and PC1 remain non-significant; climate sensitivity is concentrated in the most vulnerable extinction scenarios.
+% \end{frame}
+
+% % =================================================
+% \begin{frame}{Section 4: SCM Robustness}
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{SCM Robustness vs.\ Precipitation \& GDD}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=1\linewidth]{figures/SCM_Robustness_by_climate.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Same mixed-model approach for SCM robustness, comparing random- vs.\ dominant-plant removal, versus APi and GDD. \\
+% \textbf{Result:} Robustness increases significantly with precipitation in both scenarios (random $p=0.033$; dominant $p=0.030$), but neither shows a significant GDD effect (random $p=0.23$; dominant $p=0.06$).
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{SCM Robustness vs.\ Climate PCA}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=1\linewidth]{figures/SCM_Robustness_by_PCAclimate.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Same SCM models using PC1 and PC2. \\
+% \textbf{Result:} Neither scenario shows a significant relationship with PC1 or PC2 (all $p>0.08$).
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{SCM Robustness: Full Model (PC1 + GDD)}
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=1\linewidth]{figures/SCM_Robustness_by_PC1GDD.pdf}
+% \end{figure}
+% \small
+% \textbf{Test:} Full SCM model with PC1 and a quadratic GDD term. \\
+% \textbf{Result:} Robustness under the dominant-plant-removal scenario increases significantly across the season ($p=0.023$); the random-removal scenario and PC1 remain non-significant in both scenarios.
+% \end{frame}
+
+% % =================================================
+% \begin{frame}{Results Summary}
+% \small
+% \begin{itemize}
+%     \item \textbf{Precipitation (APi)} has the clearest, most consistent effects: it reduces pollinator redundancy and plant generalization (structure), and increases SCM robustness in both scenarios.
+%     \item \textbf{Seasonal progression (GDD)} matters for pollinator richness, plant generalization, and functional evenness/divergence (all decline); it only affects robustness in the ``dominant/generalist removed first'' scenarios (both TCM and SCM), where robustness rises through the season.
+%     \item \textbf{Climate PCA (PC1: high = cool/wet, low = warm/dry)} shows the strongest, most consistent structural signal; complementarity and redundancy decline as conditions get cooler/wetter, agreeing with the APi result, but PC1 is never significant for robustness. PC2 was never significant anywhere and is dropped.
+%     \item \textbf{Functional dispersion} never responds to climate in any model; evenness and divergence respond only to seasonal progression (GDD).
+%     \item Random site/year effects consistently explain far more variance than fixed climate effects (conditional $R^2$ often several times marginal $R^2$).
+% \end{itemize}
+% \end{frame}
+
+% % ------------------------------------------------
+% \begin{frame}{Discussion}
+% \small
+% \begin{itemize}
+%     \item Precipitation and seasonal timing look like the primary climate axes driving both structural change and robustness; the composite PC1 axis mostly tracks structure, not robustness.
+%     \item Robustness only responds to climate in the ``worst-case'' extinction orderings (dominant/generalist species removed first); climate may matter most when the community is attacked most severely.
+%     \item Structural shifts toward lower redundancy/generalization under wetter and PC1-shifted conditions suggest a move toward more specialized, complementary interaction structure; worth connecting to H1/H2 framing from the original proposal.
+%     \item Large gaps between marginal and conditional $R^2$ across nearly every model flag substantial site- and year-level variation not captured by climate alone.
+%     \item \textbf{Open question for LP/SJ:} which climate parameterization (APi+GDD vs.\ PC1+PC2 vs.\ full PC1+GDD) should we adopt as the primary framework for the manuscript, and which structural/robustness results are strong enough to keep vs.\ jettison?
+% \end{itemize}
+% \end{frame}
+
+% \end{document}
