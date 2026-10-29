@@ -13,11 +13,11 @@ args <- commandArgs(trailingOnly=TRUE)
 if(length(args) != 0){
     net.type <- args[1]
     species <- args[2]
-    species.goup <- args[3]
+    species.group <- args[3]
 } else{
-    net.type <- "Year" ## Year or YearSR
-    species <- "Plant" ## Plant or Parasite
-    species.group <- "Bees" ## Bees or BeesSyrphids
+  net.type <- "YearSR"
+  species <- "Plant"
+  species.group <- "BeesFliesLepidoptera"
 }
 
 
@@ -42,9 +42,27 @@ if(net.type == "YearSR"){
     nets.by.SR  <- FALSE
 }
 
+# Load expanded networks directly from skyIslands
+network_file <- file.path(
+  local.path,
+  "skyIslands",
+  "data",
+  "networks",
+  sprintf(
+    "%s_%s_%s.Rdata",
+    net.type,
+    paste(species, collapse = ""),
+    species.group
+  )
+)
 
-load(file=sprintf("../../data/networks/%s_%s_%s.Rdata", net.type,
-                  paste(species, collapse=""), species.group
-                  ))
+stopifnot(file.exists(network_file))
+
+load(network_file)
+
+# Confirm expected networks
+stopifnot(length(nets) == 61)
+
+cat("Loaded", length(nets), "networks from:\n", network_file, "\n")
 
 

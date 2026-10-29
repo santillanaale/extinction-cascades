@@ -1,10 +1,4 @@
-# Refactored version: same models/figures as the original script, but
-# TCM, SCM, and Network Structural Property sections now share one set
-# of fit / stats / predict / plot helpers instead of six near-identical
-# copies of each step.
-
 rm(list=ls())
-
 library(bipartite)
 library(tidyverse)
 library(ggplot2)
@@ -15,7 +9,6 @@ library(lmerTest)
 library(ggeffects)
 library(car)
 library(performance)
-
 set.seed(123)
 setwd("~/")
 source("lab_paths.R")
@@ -28,9 +21,17 @@ setwd(file.path(local.path, "skyIslands_saved"))
 geography <- read.csv("data/relational/original/geography.csv")
 
 setwd(file.path(local.path, "extinction-cascades"))
-exposure <- read_csv("exposure.csv")
-load("analysis/network/saved/corMets_PlantPollinator_YearSR.Rdata")
+exposure <- read_csv("data/exposure.csv")
+# Load audited Q2 metrics (61 networks, 52 columns)
+cor.dats <- readRDS(
+  "analysis/network/saved/q2_metrics_table_expanded_61_N100.rds"
+)
 
+stopifnot(
+  nrow(cor.dats) == 61,
+  ncol(cor.dats) == 52,
+  !anyDuplicated(cor.dats$Network)
+)
 
 ## *******************************************************************
 # ---- Helper functions ----
@@ -300,8 +301,6 @@ site_order <- geography %>%
   pull(Site)
 
 cor.dats <- cor.dats %>%
-  separate(Site, into = c("Site", "Year", "SampleRound"), sep = "\\.",
-           convert = TRUE, remove = FALSE) %>%
   left_join(
     exposure %>% select(Site, Year, SampleRound, APi, GDD, PC1, PC2),
     by = c("Site", "Year", "SampleRound")
