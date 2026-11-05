@@ -33,6 +33,16 @@ stopifnot(
   !anyDuplicated(cor.dats$Network)
 )
 
+# Load audited Q1 community-composition table
+q1_comp <- read_csv(
+  "data/Q1_community_composition.csv"
+)
+
+stopifnot(
+  nrow(q1_comp) == 61,
+  !anyDuplicated(q1_comp$Network)
+)
+
 ## *******************************************************************
 # ---- Helper functions ----
 ## *******************************************************************
@@ -224,7 +234,7 @@ print_diagnostics <- function(mods, label){
 
 
 ## *******************************************************************
-# ---- TCM robustness ----
+# ---- Q3 TCM robustness ----
 ## *******************************************************************
 tcm_climate <- tcm_results %>%
   left_join(exposure, by = c("Site", "Year", "SampleRound"))
@@ -258,7 +268,7 @@ p_tcm_pc1gdd <- plot_scenario_climate(
 
 
 ## *******************************************************************
-# ---- SCM robustness ----
+# ---- Q3 SCM robustness ----
 ## *******************************************************************
 scm_climate <- scm_results %>%
   left_join(exposure, by = c("Site", "Year", "SampleRound"))
@@ -292,7 +302,7 @@ p_scm_pc1gdd <- plot_scenario_climate(
 
 
 ## *******************************************************************
-# ---- Network structural properties ----
+# ---- Q2 Network structural properties ----
 ## *******************************************************************
 site_order <- geography %>%
   group_by(Site) %>%
@@ -368,9 +378,105 @@ p_gdd_adj <- plot_metric_climate(
   out_file = "analysis/network/figures/NetworkStructure_GDD_adjPC1.pdf"
 )
 
+## *******************************************************************
+# ---- Q1 Community Composition ----
+## *******************************************************************
+q1_comp_climate <- q1_comp %>%
+  left_join(
+    exposure %>%
+      select(Site, Year, SampleRound, APi, GDD, PC1, PC2),
+    by = c("Site", "Year", "SampleRound")
+  ) %>%
+  mutate(
+    Site        = factor(Site, levels = site_order),
+    Year        = factor(Year),
+    SampleRound = factor(SampleRound)
+  )
+
+# Audit join
+stopifnot(
+  nrow(q1_comp_climate) == 61,
+  !anyDuplicated(q1_comp_climate$Network),
+  sum(is.na(q1_comp_climate$APi)) == 0,
+  sum(is.na(q1_comp_climate$GDD)) == 0,
+  sum(is.na(q1_comp_climate$PC1)) == 0,
+  sum(is.na(q1_comp_climate$PC2)) == 0
+)
+
+guilds <- c(
+  "OtherBees",
+  "Honeybee",
+  "Syrphidae",
+  "Bombyliidae",
+  "Lepidoptera"
+)
+
+q1_abundance_metrics <- paste0("Abundance_", guilds)
+q1_richness_metrics  <- paste0("Richness_", guilds)
+q1_shannon_metrics <- paste0(
+  "Shannon_",
+  setdiff(guilds, "Honeybee")
+)
+
+q1_plant_metrics <- c(
+  "PlantRichness",
+  "PlantShannon"
+)
+
+q1_comp_climate %>%
+  select(
+    all_of(q1_abundance_metrics),
+    all_of(q1_richness_metrics),
+    all_of(q1_shannon_metrics),
+    all_of(q1_plant_metrics)
+  ) %>%
+  summary()
+
+q1_zero_summary <- q1_comp_climate %>%
+  summarize(
+    across(
+      all_of(c(q1_abundance_metrics,
+               q1_richness_metrics)),
+      ~ sum(.x == 0),
+      .names = "zeros_{.col}"
+    ),
+    across(
+      all_of(q1_shannon_metrics),
+      ~ sum(is.na(.x)),
+      .names = "NA_{.col}"
+    )
+  )
+
+q1_zero_summary
+
+mods_q1_shannon_api <- fit_models(
+  q1_shannon_metrics,
+  q1_comp_climate,
+  "scale(APi)"
+)
+
+mods_q1_shannon_gdd <- fit_models(
+  q1_shannon_metrics,
+  q1_comp_climate,
+  "scale(GDD)"
+)
+
+mods_q1_shannon_pca <- fit_models(
+  q1_shannon_metrics,
+  q1_comp_climate,
+  "scale(PC1)+scale(PC2)"
+)
+
+mods_q1_shannon_pc1gdd <- fit_models(
+  q1_shannon_metrics,
+  q1_comp_climate,
+  "scale(PC1)+poly(GDD,2)"
+)
+
+
 
 ## *******************************************************************
-# ---- Functional diversity (bee community, SiteYearSR level) ----
+# ---- Q1 Functional diversity (bee community, SiteYearSR level) ----
 ## *******************************************************************
 ## Bee functional divergense (BeeFDiv), dispersion (BeeFDis) and evenness (BeeFEve) come from
 ## src/calcFuncUniqOrig.R / 5_funcTraits.R and are stored on spec.net,
