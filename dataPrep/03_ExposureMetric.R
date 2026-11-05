@@ -2,11 +2,13 @@ rm(list=ls())
 library(tidyverse)
 library(ggplot2)
 library(ggfortify)
+setwd("~/")
+source("lab_paths.R")
+setwd(file.path(local.path, "skyIslands_saved/"))
 
-setwd("../skyIslands_saved/")
 climate <- read_csv("data/relational/original/climate.csv")
 
-setwd("../extinction-cascades")
+setwd(file.path(local.path, "extinction-cascades"))
 
 ## ===============================================================
 ## Create multivariate climate exposure metric
