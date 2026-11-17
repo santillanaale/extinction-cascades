@@ -7,7 +7,11 @@ source("lab_paths.R")
 
 # ---- Load Networks ----
 setwd(file.path(local.path, "skyIslands"))
-load("data/networks/YearSR_PlantPollinator_BeesFliesLepidoptera.Rdata") #Site x Year x Survey Round for Bees, Syrphid and Bombilyiid Flies, Leps
+load("data/networks/YearSR_PlantPollinator_BeesSyrphidsButterflyHawk.Rdata") #Site x Year x Survey Round for Bees, Syrphid and Bombilyiid Flies, Leps
+
+# Exclude empty matrices from extinction simulations.
+# The empty event remains in the community analysis table.
+nets <- nets[vapply(nets, function(web) sum(web) > 0, logical(1))]
 
 ## ---- Make net key ----
 net_meta <- tibble(net_id = names(nets)) %>%
