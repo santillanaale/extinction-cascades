@@ -4,9 +4,16 @@ library(ggplot2)
 library(ggfortify)
 setwd("~/")
 source("lab_paths.R")
-setwd(file.path(local.path, "skyIslands_saved/"))
 
-climate <- read_csv("data/relational/original/climate.csv")
+climate <- read_csv(
+  file.path(local.path, "skyIslands", "data", "sitestats.csv"),
+  col_types = cols(SampleRound = col_character())
+) %>%
+  select(
+    Site, Year, SampleRound,
+    Tmean_anom, Tmax_anom, Tmin_anom,
+    Precip_anom, VPD_anom
+  )
 
 setwd(file.path(local.path, "extinction-cascades"))
 

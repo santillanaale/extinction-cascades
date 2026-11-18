@@ -7,7 +7,7 @@ source("lab_paths.R")
 
 # ---- Load Networks ----
 setwd(file.path(local.path, "skyIslands"))
-load("data/networks/YearSR_PlantPollinator_BeesSyrphidsButterflyHawk.Rdata") #Site x Year x Survey Round for Bees, Syrphid and Bombilyiid Flies, Leps
+load("data/networks/YearSR_PlantPollinator_BeesSyrphidsButterflyHawk.Rdata") #Site x Year x Survey Round for Bees, Syrphids, Butterflies + Hawk Moths
 
 # Exclude empty matrices from extinction simulations.
 # The empty event remains in the community analysis table.
