@@ -64,9 +64,6 @@ analysis <- community %>%
 cat("\n--- Analysis dimensions ---\n")
 print(dim(analysis))
 
-cat("\n--- Missing PCA scores ---\n")
-print(colSums(is.na(analysis[c("PC1", "PC2")])))
-
 cat("\n--- RP 2018 round 1 ---\n")
 print(
   analysis %>%
@@ -80,9 +77,86 @@ stopifnot(
   all(is.finite(analysis$PC2))
 )
 
-# analysis_file <- file.path(model.dir, "Q1_analysis.csv")
-# 
-# write.csv(analysis, analysis_file, row.names = FALSE)
+# Select the model inputs
+q1_abundance_ys <- c(
+  "BeeAbundance",
+  "SyrphidAbundance",
+  "HBAbundance",
+  "BombusAbundance",
+  "NonBombusHBAbundance",
+  "ButterflyHawkAbundance",
+  "BeeSyrphLepAbundance",
+  "MeanFloralAbundance",
+  "MeanFloweringPlantAbundance"
+)
+
+q1_richness_ys <- c(
+  "BeeRichness",
+  "SyrphidRichness",
+  "BombusRichness",
+  "ButterflyHawkRichness",
+  "BeeSyrphLepRichness",
+  "VisitedFloralRichness",
+  "MeanFloralRichness"
+)
+
+# Each Shannon response is paired with the richness of the same group.
+shannon_richness <- c(
+  BeeDiversity = "BeeRichness",
+  SyrphidDiversity = "SyrphidRichness",
+  BombusDiversity = "BombusRichness",
+  ButterflyHawkDiversity = "ButterflyHawkRichness",
+  BeeSyrphLepDiversity = "BeeSyrphLepRichness",
+  VisitedFloralDiversity = "VisitedFloralRichness",
+  MeanFloralDiversity = "MeanFloralRichness"
+)
+
+q1_shannon_ys <- c(names(shannon_richness), "MeanFloweringPlantDiversity")
+
+q1_ys <- c(q1_abundance_ys, q1_richness_ys, q1_shannon_ys)
+
+q2_cols <- c(
+  "number.of.species.HL",
+  "number.of.species.LL",
+  "functional.complementarity.HL",
+  "functional.complementarity.LL",
+  "FunRedundancy.Plants",
+  "FunRedundancy.Pols",
+  "mean.number.of.links.HL",
+  "mean.number.of.links.LL",
+  "znumber.of.species.HL",
+  "znumber.of.species.LL",
+  "zfunctional.complementarity.HL",
+  "zfunctional.complementarity.LL",
+  "zmean.number.of.links.HL",
+  "zmean.number.of.links.LL",
+  "zFunRedundancy.Plants",
+  "zFunRedundancy.Pols",
+  "pnumber.of.species.HL",
+  "pnumber.of.species.LL",
+  "pfunctional.complementarity.HL",
+  "pfunctional.complementarity.LL",
+  "pmean.number.of.links.HL",
+  "pmean.number.of.links.LL",
+  "pFunRedundancy.Plants",
+  "pFunRedundancy.Pols"
+)
+
+analysis_cols <- unique(c(
+  keys, "PC1", "PC2",
+  q1_ys, unname(shannon_richness),
+  q2_cols
+))
+
+analysis <- analysis %>%
+  select(all_of(analysis_cols))
+
+cat("\n--- Analysis dimensions ---\n")
+print(dim(analysis))
+
+analysis_file <- file.path(model.dir, "Q1_analysis.csv")
+
+write.csv(analysis, analysis_file, row.names = FALSE)
 
 # 4. Assemble Q3 analysis table --------------------------------------
 
@@ -94,63 +168,7 @@ stopifnot(
 #   )
 
 # 5. Fit Q1 response models -----------------------------------------
-# PC1 and PC2 are fixed effects.
-# Site and Year each get a random intercept.
-
-pollinator_labels <- c(
-  # Poll = "All netted pollinators",
-  Bee = "Bees",
-  Syrphid = "Hoverflies",
-  HB = "Honey bees",
-  Bombus = "Bumble bees",
-  NonBombusHB = "Other bees",
-  ButterflyHawk = "Butterflies and hawkmoths",
-  BeeSyrphLep = "Focal pollinators"
-)
-
-# The response column names also become the names of the fitted models in each list.
-q1_abundance_ys <- c(
-  # "PollAbundance",
-  "BeeAbundance",
-  "SyrphidAbundance",
-  "HBAbundance",
-  "BombusAbundance",
-  "NonBombusHBAbundance",
-  "ButterflyHawkAbundance",
-  "BeeSyrphLepAbundance"
-)
-
-q1_richness_ys <- c(
-  # "PollRichness",
-  "BeeRichness",
-  "SyrphidRichness",
-  "BombusRichness",
-  "ButterflyHawkRichness",
-  "BeeSyrphLepRichness",
-  "VisitedFloralRichness"
-)
-
-# Each Shannon response is paired with the richness of the same group.
-shannon_richness <- c(
-  # PollDiversity = "PollRichness",
-  BeeDiversity = "BeeRichness",
-  SyrphidDiversity = "SyrphidRichness",
-  BombusDiversity = "BombusRichness",
-  ButterflyHawkDiversity = "ButterflyHawkRichness",
-  BeeSyrphLepDiversity = "BeeSyrphLepRichness",
-  VisitedFloralDiversity = "VisitedFloralRichness"
-)
-
-q1_shannon_ys <- names(shannon_richness)
-
-# Labels for the figure code.
-floral_labels <- c(
-  VisitedFloralRichness = "Visited plant richness",
-  VisitedFloralDiversity = "Visited plant Shannon diversity"
-)
-
-q1_ys <- c(q1_abundance_ys, q1_richness_ys, q1_shannon_ys)
-stopifnot(all(q1_ys %in% names(analysis)))
+# PC1 and PC2 are fixed effects; Site and Year each get a random intercept.
 
 # Store fitted models and diagnostics separately from the figures.
 model.dir <- file.path(dir.EC, "results", "climate_models", "Q1")
@@ -218,11 +236,16 @@ for (y in q1_richness_ys) {
 shannon_models <- list()
 
 for (y in q1_shannon_ys) {
-  richness_col <- shannon_richness[[y]]
-  needed <- c(y, richness_col, "PC1", "PC2", "Site", "Year")
+  if (y == "MeanFloweringPlantDiversity") {
+    presence_col <- "MeanFloweringPlantAbundance"
+  } else {
+    presence_col <- shannon_richness[[y]]
+  }
   
+  needed <- c(y, presence_col, "PC1", "PC2", "Site", "Year")
   dat <- analysis[complete.cases(analysis[, needed]), ]
-  dat <- dat[dat[[richness_col]] > 0, ]
+  dat <- dat[dat[[presence_col]] > 0, ]
+  
   message(y, " | n = ", nrow(dat))
   
   equation <- as.formula(
@@ -280,6 +303,14 @@ for (y in names(models)) {
   }, finally = dev.off())
 }
 
+# 5e. Assess singularities
+singular_ys <- model_checks$response[model_checks$singular]
+
+for (y in singular_ys) {
+  cat("\n", y, "\n", sep = "")
+  print(lme4::VarCorr(models[[y]]))
+}
+
 # 6. Plot Q1 climate effects ------------------------------------------
 
 geography <- read.csv(
@@ -293,12 +324,36 @@ site_order <- geography %>%
   arrange(desc(Lat)) %>%
   pull(Site)
 
+pollinator_labels <- c(
+  Bee = "Bees",
+  Syrphid = "Hoverflies",
+  HB = "Honey bees",
+  Bombus = "Bumble bees",
+  NonBombusHB = "Other bees",
+  ButterflyHawk = "Butterflies and hawkmoths",
+  BeeSyrphLep = "Focal pollinators"
+)
+
+response_labels <- c(
+  pollinator_labels,
+  VisitedFloral = "Visited plants",
+  MeanFloral = "Quadrat flowers",
+  MeanFloweringPlant = "Quadrat flowering plants"
+)
+
 ## 6a. coefficient plots ----
 # Exponentiate the count-model slopes and intervals to get expected count ratios.
 # Shannon estimates are changes on the original scale.
+response_labels <- pollinator_labels
+response_labels[c("VisitedFloral", "MeanFloral", "MeanFloweringPlant")] <- c(
+  "Visited plants",
+  "Quadrat flowers",
+  "Quadrat flowering plants"
+)
+
 axis_labels <- c(
-  abundance = "Expected abundance ratio per 1-unit increase in PC score",
-  richness  = "Expected richness ratio per 1-unit increase in PC score",
+  abundance = "Change in abundance per 1-unit increase in PC score",
+  richness  = "Change in richness per 1-unit increase in PC score",
   shannon   = "Change in Shannon diversity per 1-unit increase in PC score"
 )
 
@@ -318,67 +373,108 @@ for (group in names(model_groups)) {
     coefs <- fixed_coefs(model)[c("PC1", "PC2"), , drop = FALSE]
     
     group_key <- sub("(Abundance|Richness|Diversity)$", "", y)
-    label <- if (group_key == "VisitedFloral") {
-      "Visited plants"
-    } else {
-      pollinator_labels[[group_key]]
+    if (!group_key %in% names(response_labels)) {
+      stop("Missing plot label for ", y, " (key: ", group_key, ")")
+    }
+    
+    link <- family(model)$link
+    if (!link %in% c("identity", "log")) {
+      stop("Unsupported link for ", y, ": ", link)
     }
     
     effects[[y]] <- data.frame(
-      taxon = label,
+      taxon = response_labels[[group_key]],
       component = rownames(coefs),
       estimate = coefs[, "Estimate"],
       lower = coefs[, "Estimate"] - 1.96 * coefs[, "Std. Error"],
       upper = coefs[, "Estimate"] + 1.96 * coefs[, "Std. Error"],
+      link = link,
       row.names = NULL
     )
   }
   
-  plot_data <- bind_rows(effects)
-  plot_data$taxon <- factor(
-    plot_data$taxon, levels = rev(unique(plot_data$taxon))
-  )
+  group_effects <- bind_rows(effects)
   
-  reference <- 0
-  if (group %in% c("abundance", "richness")) {
-    plot_data$estimate <- exp(plot_data$estimate)
-    plot_data$lower <- exp(plot_data$lower)
-    plot_data$upper <- exp(plot_data$upper)
-    reference <- 1
+  for (link in unique(group_effects$link)) {
+    plot_data <- group_effects[group_effects$link == link, ]
+    plot_data$taxon <- factor(
+      plot_data$taxon,
+      levels = rev(unique(plot_data$taxon))
+    )
+    
+    reference <- 0
+    axis_label <- axis_labels[[group]]
+    file_group <- group
+    
+    if (link == "log") {
+      plot_data$estimate <- exp(plot_data$estimate)
+      plot_data$lower <- exp(plot_data$lower)
+      plot_data$upper <- exp(plot_data$upper)
+      reference <- 1
+      axis_label <- paste0(
+        "Expected ", group, " ratio per 1-unit increase in PC score"
+      )
+    }
+    
+    if (group == "abundance" && link == "identity") {
+      file_group <- "abundance_original_scale"
+    }
+    
+    dodge <- position_dodge(width = 0.5)
+    
+    p <- ggplot(plot_data, aes(taxon, estimate, color = component)) +
+      geom_hline(
+        yintercept = reference, linetype = "dashed", color = "grey50"
+      ) +
+      geom_errorbar(
+        aes(ymin = lower, ymax = upper),
+        position = dodge, width = 0.15, linewidth = 0.6
+      ) +
+      geom_point(aes(shape = component), position = dodge, size = 2.8) +
+      coord_flip() +
+      scale_color_manual(values = c(PC1 = "#0072B2", PC2 = "#B64F00")) +
+      scale_shape_manual(values = c(PC1 = 16, PC2 = 17)) +
+      labs(
+        x = NULL,
+        y = axis_label,
+        color = NULL,
+        shape = NULL,
+        caption = paste(
+          "Points show fixed-effect estimates.",
+          "Bars show approximate 95% Wald intervals."
+        )
+      ) +
+      theme_classic(base_size = 12) +
+      theme(
+        legend.position = "top",
+        plot.caption = element_text(hjust = 0)
+      )
+    
+    print(p)
+    ggsave(
+      file.path(plot.dir, paste0("Q1_", file_group, "_effects.pdf")),
+      plot = p, width = 8, height = 4.8
+    )
   }
-  
-  dodge <- position_dodge(width = 0.5)
-  
-  p <- ggplot(plot_data, aes(taxon, estimate, color = component)) +
-    geom_hline(yintercept = reference, linetype = "dashed", color = "grey50") +
-    geom_errorbar(aes(ymin = lower, ymax = upper),
-                  position = dodge, width = 0.15, linewidth = 0.6) +
-    geom_point(aes(shape = component), position = dodge, size = 2.8) +
-    coord_flip() +
-    scale_color_manual(values = c(PC1 = "#0072B2", PC2 = "#B64F00")) +
-    scale_shape_manual(values = c(PC1 = 16, PC2 = 17)) +
-    labs(
-      x = NULL,
-      y = axis_labels[[group]],
-      color = NULL,
-      shape = NULL,
-      caption = "Points show fixed-effect estimates. Bars show approximate 95% Wald intervals."
-    ) +
-    theme_classic(base_size = 12) +
-    theme(legend.position = "top", plot.caption = element_text(hjust = 0))
-  
-  print(p)
-  ggsave(file.path(plot.dir, paste0("Q1_", group, "_effects.pdf")),
-         plot = p, width = 8, height = 4.8)
 }
 
 ## 6b. scatterplots ----
-# Plot observed points and a fixed-effect fitted curve for each climate axis.
-# The shaded band is a pointwise confidence interval for the mean response.
+# Plot observed points and a fixed-effect fitted line for each climate axis.
+# The shaded band is an approximate pointwise 95% CI for the fitted mean.
 
-response_labels <- c(pollinator_labels, VisitedFloral = "Visited plants")
+panel_order <- c(
+  "BeeSyrphLep", "Bee", "Syrphid", "ButterflyHawk",
+  "HB", "Bombus", "NonBombusHB", "VisitedFloral",
+  "MeanFloral", "MeanFloweringPlant"
+)
+
+year_levels <- sort(unique(as.character(analysis$Year[!is.na(analysis$Year)])))
+ncol_panels <- 4
 
 for (group in names(model_groups)) {
+  group_models <- model_groups[[group]]
+  if (length(group_models) == 0L) next
+  
   response_suffix <- switch(
     group,
     abundance = "abundance",
@@ -386,31 +482,39 @@ for (group in names(model_groups)) {
     shannon = "Shannon diversity"
   )
   
+  nrow_panels <- ceiling(length(group_models) / ncol_panels)
+  
   pdf(
     file.path(plot.dir, paste0("Q1_", group, "_scatterplots.pdf")),
-    width = 14, height = 8
+    width = 14, height = max(8, 3.5 * nrow_panels)
   )
   
   tryCatch({
     for (pc in c("PC1", "PC2")) {
       response_plots <- list()
       
-      for (y in names(model_groups[[group]])) {
-        model <- model_groups[[group]][[y]]
+      for (y in names(group_models)) {
+        model <- group_models[[y]]
         dat <- model.frame(model)
+        
         if (!"Year" %in% names(dat)) {
-          # Recover the survey year for the exact rows used to fit the model.
+          # Recover the survey year for the rows used to fit the model.
           survey_rows <- match(rownames(dat), rownames(analysis))
           stopifnot(!anyNA(survey_rows))
           dat$Year <- analysis$Year[survey_rows]
         }
+        
         stopifnot(all(as.character(dat$Site) %in% site_order))
         dat$Site <- factor(dat$Site, levels = site_order)
+        dat$Year <- factor(dat$Year, levels = year_levels)
         
         group_key <- sub("(Abundance|Richness|Diversity)$", "", y)
+        if (!group_key %in% names(response_labels)) {
+          stop("Missing plot label for ", y, " (key: ", group_key, ")")
+        }
         y_label <- paste(response_labels[[group_key]], response_suffix)
         
-        # Vary the plotted PC and hold the other PC at its mean.
+        # Vary the plotted PC across the range used in this model.
         scores <- seq(min(dat[[pc]]), max(dat[[pc]]), length.out = 100)
         new_data <- data.frame(
           PC1 = rep(mean(dat$PC1), length(scores)),
@@ -418,35 +522,32 @@ for (group in names(model_groups)) {
         )
         new_data[[pc]] <- scores
         
-        if (inherits(model, "glmmTMB")) {
-          new_data$Site <- dat$Site[1]
-        }
-        
-        # Calculate the fitted mean and its pointwise confidence interval.
-        fit_link <- predict(
-          model, newdata = new_data, re.form = NA, type = "link"
-        )
+        coefs <- fixed_coefs(model)
         fixed_vcov <- if (inherits(model, "glmmTMB")) {
           as.matrix(vcov(model)$cond)
         } else {
           as.matrix(vcov(model))
         }
+        
+        # Compute the fixed-effect fit and interval on the link scale.
         X <- model.matrix(~ PC1 + PC2, data = new_data)
-        X <- X[, colnames(fixed_vcov), drop = FALSE]
+        terms <- colnames(X)
+        beta <- coefs[terms, "Estimate"]
+        fixed_vcov <- fixed_vcov[terms, terms, drop = FALSE]
+        
+        fit_link <- drop(X %*% beta)
         fit_se <- sqrt(rowSums((X %*% fixed_vcov) * X))
         inverse_link <- family(model)$linkinv
         
-        coefs <- fixed_coefs(model)
         estimate <- coefs[pc, "Estimate"]
         cutoff <- 1.96 * coefs[pc, "Std. Error"]
-        line_type <- if (abs(estimate) > cutoff) "significant" else "ns"
+        line_type <- if (abs(estimate) > cutoff) "solid" else "dashed"
         
         fit_data <- data.frame(
           score = scores,
           fitted = inverse_link(fit_link),
           lower = inverse_link(fit_link - 1.96 * fit_se),
-          upper = inverse_link(fit_link + 1.96 * fit_se),
-          signif = line_type
+          upper = inverse_link(fit_link + 1.96 * fit_se)
         )
         
         response_plots[[y]] <- ggplot(dat) +
@@ -457,18 +558,16 @@ for (group in names(model_groups)) {
           ) +
           geom_point(
             aes(x = .data[[pc]], y = .data[[y]], color = Site, shape = Year),
-            alpha = 0.7, size = 2
+            alpha = 0.7, size = 2,
+            show.legend = TRUE
           ) +
           geom_line(
             data = fit_data,
-            aes(x = score, y = fitted, linetype = signif),
-            color = "black", linewidth = 1
+            aes(x = score, y = fitted),
+            color = "black", linewidth = 1, linetype = line_type
           ) +
-          scale_linetype_manual(
-            values = c(significant = "solid", ns = "dashed"),
-            guide = "none"
-          ) +
-          scale_color_discrete(drop = FALSE) +
+          scale_color_discrete(limits = site_order, drop = FALSE) +
+          scale_shape_discrete(limits = year_levels, drop = FALSE) +
           labs(x = pc, y = y_label, color = "Site (N to S)", shape = "Year") +
           theme_minimal(base_size = 12) +
           theme(
@@ -477,22 +576,24 @@ for (group in names(model_groups)) {
           )
       }
       
-      panel_order <- c(
-        "BeeSyrphLep", "Bee", "Syrphid", "ButterflyHawk",
-        "HB", "Bombus", "NonBombusHB", "VisitedFloral"
-      )
-      
       panel_groups <- sub(
         "(Abundance|Richness|Diversity)$", "", names(response_plots)
       )
-      
       response_plots <- response_plots[order(match(panel_groups, panel_order))]
       
       combined <- patchwork::wrap_plots(
-        response_plots, ncol = 4, guides = "collect"
-      ) & theme(legend.position = "right")
+        response_plots, ncol = ncol_panels, guides = "collect"
+      ) +
+        patchwork::plot_annotation(
+          caption = paste(
+            "Shading shows approximate pointwise 95% confidence intervals",
+            "for the fitted means.",
+            "Solid lines indicate a PC coefficient whose 95% Wald interval",
+            "excludes zero."
+          )
+        )
       
-      print(combined)
+      print(combined & theme(legend.position = "right"))
     }
   }, finally = dev.off())
 }
