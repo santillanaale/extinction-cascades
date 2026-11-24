@@ -158,27 +158,20 @@ scm_results <- map_dfr(seq_len(nrow(scm_scenarios)), function(s) {
 })
 
 ## *******************************************************************
-# ---- Merge climate and save ----
+# ---- Export community-by-scenario robustness scores ----
 ## *******************************************************************
 
-setwd("~/")
-setwd(file.path(local.path, "skyIslands_saved"))
-climate <- read.csv("data/relational/original/climate.csv")
+robustness_scores <- bind_rows(
+  TCM = tcm_results,
+  SCM = scm_results %>%
+    rename(Robustness = SCM_Robustness),
+  .id = "cascade_model"
+) %>%
+  select(Site, Year, SampleRound, cascade_model, scenario, Robustness) %>%
+  arrange(Site, Year, SampleRound, cascade_model, scenario)
 
-setwd("~/")
-setwd(file.path(local.path, "extinction-cascades"))
-
-# tcm_climate <- tcm_results %>%
-#   left_join(climate, by = c("Site", "Year", "SampleRound"))
-# 
-# scm_climate <- scm_results %>%
-#   left_join(climate, by = c("Site", "Year", "SampleRound"))
-
-save(
-  tcm_results,
-  tcm_replicates,
-  scm_results,
-  # tcm_climate,
-  # scm_climate,
-  file = "analysis/network/robustness_metrics/YearSR_robustness_climate.Rdata"
+write.csv(
+  robustness_scores,
+  file.path(local.path, "extinction-cascades", "data", "YearSR_robustness_scores.csv"),
+  row.names = FALSE
 )
