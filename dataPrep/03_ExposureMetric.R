@@ -109,6 +109,42 @@ exposure <- bind_cols(
 write.csv(exposure,"data/exposure.csv",row.names = FALSE)
 
 ## ===============================================================
+## Save exposure axis interpretation
+## ===============================================================
+
+exposure_interpretation <- tibble(
+  Axis = c("PC1", "PC2"),
+  MovingRightMeans = c(
+    if (pca$rotation["Tmean_anom", "PC1"] < 0) {
+      paste(
+        "Cooler conditions and lower vapor pressure deficit (VPD),",
+        "with precipitation tending to increase"
+      )
+    } else {
+      paste(
+        "Warmer conditions and higher vapor pressure deficit (VPD),",
+        "with precipitation tending to decrease"
+      )
+    },
+    if (pca$rotation["Precip_anom", "PC2"] > 0) {
+      paste(
+        "More precipitation, warmer minimum temperatures,",
+        "cooler maximum temperatures, and lower VPD"
+      )
+    } else {
+      paste(
+        "Less precipitation, cooler minimum temperatures,",
+        "warmer maximum temperatures, and higher VPD"
+      )
+    }
+  ),
+  ZeroRepresents = "Pooled center across the rows used to fit the exposure PCA",
+  VarianceExplainedPct = round(100 * variance$Variance[1:2], 1)
+)
+
+write_csv(exposure_interpretation, "data/Exposure_Interpretation.csv")
+
+## ===============================================================
 ## Visualization
 ## ===============================================================
 
@@ -197,42 +233,3 @@ ggplot(
   geom_col() +
   theme_classic() +
   ylab("Proportion of variance explained")
-
-
-## ===============================================================
-## Interpretation (update as variables or loadings change)
-##
-## PC1: Warm–dry versus cool–wet climate departures.
-##
-## PC2: Secondary temperature–precipitation gradient.
-##
-## Interpretation should always be confirmed using the loading
-## matrix (Exposure_Loadings.csv).
-## ===============================================================
-
-
-## ===============================================================
-## Future work
-##
-## - Join Exposure.csv with network robustness results.
-## - Model:
-##
-##     Robustness ~ PC1 + PC2 + (1 | Site)
-##
-##  When you do the robustness regression,
-##  do a separate model for each extinction scenario (vs all in one model with the fixed effect).
-## - Compare PCA-based exposure with APi and GDD models.
-## ===============================================================
-
-
-# ===============================================================
-# Optional:
-#
-# Quantify the magnitude of climate departure using Euclidean
-# distance in standardized anomaly space.
-#
-# ClimateDistance <- sqrt(...)
-#
-# This would represent the magnitude of exposure, whereas the PCA
-# axes represent the direction of exposure.
-# ===============================================================

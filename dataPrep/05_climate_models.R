@@ -96,7 +96,6 @@ q1_richness_ys <- c(
   "BombusRichness",
   "ButterflyHawkRichness",
   "BeeSyrphLepRichness",
-  "VisitedFloralRichness",
   "MeanFloralRichness"
 )
 
@@ -107,7 +106,6 @@ shannon_richness <- c(
   BombusDiversity = "BombusRichness",
   ButterflyHawkDiversity = "ButterflyHawkRichness",
   BeeSyrphLepDiversity = "BeeSyrphLepRichness",
-  VisitedFloralDiversity = "VisitedFloralRichness",
   MeanFloralDiversity = "MeanFloralRichness"
 )
 
@@ -115,37 +113,19 @@ q1_shannon_ys <- c(names(shannon_richness), "MeanFloweringPlantDiversity")
 
 q1_ys <- c(q1_abundance_ys, q1_richness_ys, q1_shannon_ys)
 
-q2_cols <- c(
-  "number.of.species.HL",
-  "number.of.species.LL",
-  "functional.complementarity.HL",
-  "functional.complementarity.LL",
-  "FunRedundancy.Plants",
-  "FunRedundancy.Pols",
-  "mean.number.of.links.HL",
-  "mean.number.of.links.LL",
-  "znumber.of.species.HL",
-  "znumber.of.species.LL",
+q2_ys <- c(
   "zfunctional.complementarity.HL",
   "zfunctional.complementarity.LL",
-  "zmean.number.of.links.HL",
-  "zmean.number.of.links.LL",
   "zFunRedundancy.Plants",
   "zFunRedundancy.Pols",
-  "pnumber.of.species.HL",
-  "pnumber.of.species.LL",
-  "pfunctional.complementarity.HL",
-  "pfunctional.complementarity.LL",
-  "pmean.number.of.links.HL",
-  "pmean.number.of.links.LL",
-  "pFunRedundancy.Plants",
-  "pFunRedundancy.Pols"
+  "zmean.number.of.links.HL",
+  "zmean.number.of.links.LL"
 )
 
 analysis_cols <- unique(c(
   keys, "PC1", "PC2",
   q1_ys, unname(shannon_richness),
-  q2_cols
+  q2_ys
 ))
 
 analysis <- analysis %>%
@@ -154,7 +134,7 @@ analysis <- analysis %>%
 cat("\n--- Analysis dimensions ---\n")
 print(dim(analysis))
 
-analysis_file <- file.path(model.dir, "Q1_analysis.csv")
+analysis_file <- file.path(dir.EC, "data", "analysis.csv")
 
 write.csv(analysis, analysis_file, row.names = FALSE)
 
@@ -167,8 +147,7 @@ write.csv(analysis, analysis_file, row.names = FALSE)
 #     relationship = "many-to-one"
 #   )
 
-# 5. Fit Q1 response models -----------------------------------------
-# PC1 and PC2 are fixed effects; Site and Year each get a random intercept.
+# 5. Fit and Plot Q1 Models  --------------------------------------------------
 
 # Store fitted models and diagnostics separately from the figures.
 model.dir <- file.path(dir.EC, "results", "climate_models", "Q1")
@@ -179,95 +158,49 @@ dir.create(model.dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(plot.dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(diag.dir, recursive = TRUE, showWarnings = FALSE)
 
-## 5a. fit the abundance models -----------------------------------------
-# Fit a negative binomial model for each abundance response.
-abundance_models <- list()
-
-for (y in q1_abundance_ys) {
-  needed <- c(y, "PC1", "PC2", "Site", "Year")
-  dat <- analysis[complete.cases(analysis[, needed]), ]
-  message(y, " | n = ", nrow(dat))
-  
-  equation <- as.formula(
-    paste(y, "~ PC1 + PC2 + (1 | Site) + (1 | Year)")
-  )
-  
-  model <- glmer.nb(equation, data = dat)
-  print(coef(summary(model)))
-  
-  abundance_models[[y]] <- model
-  saveRDS(model, file.path(diag.dir, paste0(y, "_model.rds")))
-}
-
-## 5b. fit the richness models -----------------------------------------
-# Fit a Poisson model for each richness response. 
-richness_models <- list()
-
-for (y in q1_richness_ys) {
-  needed <- c(y, "PC1", "PC2", "Site", "Year")
-  dat <- analysis[complete.cases(analysis[, needed]), ]
-  message(y, " | n = ", nrow(dat))
-  
-  equation <- as.formula(
-    paste(y, "~ PC1 + PC2 + (1 | Site) + (1 | Year)")
-  )
-  
-  if (y == "BombusRichness") {
-    # Year SD was estimated at zero. With Site only, COM-Poisson
-    # had lower AIC than Poisson (214.71 vs. 218.36).
-    model <- glmmTMB::glmmTMB(
-      BombusRichness ~ PC1 + PC2 + (1 | Site),
-      data = dat,
-      family = glmmTMB::compois()
-    )
-    print(summary(model)$coefficients$cond)
-  } else {
-    model <- glmer(equation, data = dat, family = poisson)
-    print(coef(summary(model)))
-  }
-  
-  richness_models[[y]] <- model
-  saveRDS(model, file.path(diag.dir, paste0(y, "_model.rds")))
-}
-
-## 5c. fit the Shannon models -----------------------------------------
-# Fit Gaussian mixed models for Shannon diversity where the corresponding richness
-# is positive. 
-shannon_models <- list()
-
-for (y in q1_shannon_ys) {
-  if (y == "MeanFloweringPlantDiversity") {
-    presence_col <- "MeanFloweringPlantAbundance"
-  } else {
-    presence_col <- shannon_richness[[y]]
-  }
-  
-  needed <- c(y, presence_col, "PC1", "PC2", "Site", "Year")
-  dat <- analysis[complete.cases(analysis[, needed]), ]
-  dat <- dat[dat[[presence_col]] > 0, ]
-  
-  message(y, " | n = ", nrow(dat))
-  
-  equation <- as.formula(
-    paste(y, "~ PC1 + PC2 + (1 | Site) + (1 | Year)")
-  )
-  
-  model <- lmer(equation, data = dat)
-  print(coef(summary(model)))
-  
-  shannon_models[[y]] <- model
-  saveRDS(model, file.path(diag.dir, paste0(y, "_model.rds")))
-}
-
-## 5d. Q1 checks and diagnostic PDFs -----------------------------------------
+## 5a. Fit the Q1 models --------------------------------------------------
+responses <- stack(list(
+  abundance = q1_abundance_ys,
+  richness = q1_richness_ys,
+  shannon = q1_shannon_ys
+))
 
 model_groups <- list(
-  abundance = abundance_models,
-  richness = richness_models,
-  shannon = shannon_models
+  abundance = list(),
+  richness = list(),
+  shannon = list()
 )
 
-models <- c(abundance_models, richness_models, shannon_models)
+for (i in seq_len(nrow(responses))) {
+  y <- responses$values[i]
+  group <- as.character(responses$ind[i])
+  needed <- c(y, "PC1", "PC2", "Site", "Year")
+  dat <- analysis[complete.cases(analysis[, needed]), ]
+  
+  message(group, " | ", y, " | n = ", nrow(dat))
+  equation <- as.formula(
+    paste(y, "~ PC1 + PC2 + (1 | Site) + (1 | Year)")
+  )
+  
+  if (group == "abundance") {
+    model <- lme4::glmer.nb(equation, data = dat)
+  } else {
+    model <- lme4::lmer(equation, data = dat)
+  }
+  
+  print(coef(summary(model)))
+  model_groups[[group]][[y]] <- model
+  saveRDS(model, file.path(diag.dir, paste0(y, "_model.rds")))
+}
+
+# Keep these names for code that uses the individual model lists.
+abundance_models <- model_groups[["abundance"]]
+richness_models <- model_groups[["richness"]]
+shannon_models <- model_groups[["shannon"]]
+
+## 5b. Checks and diagnostic PDFs -----------------------------------------
+# Combine the groups into one list, keeping the response names.
+models <- do.call(c, unname(model_groups))
 
 # Summarize sample size, singularity, and the Pearson dispersion ratio for counts.
 model_checks <- data.frame(
@@ -278,9 +211,9 @@ model_checks <- data.frame(
   pearson_dispersion = NA_real_
 )
 
-for (y in c(q1_abundance_ys, q1_richness_ys)) {
-  model <- models[[y]]
-  model_checks$pearson_dispersion[model_checks$response == y] <-
+for (i in which(model_checks$group == "abundance")) {
+  model <- models[[i]]
+  model_checks$pearson_dispersion[i] <-
     sum(residuals(model, type = "pearson")^2) / df.residual(model)
 }
 
@@ -291,19 +224,27 @@ write.csv(
   row.names = FALSE
 )
 
-# Write one diagnostic PDF per response. Close the PDF even if plotting fails.
-for (y in names(models)) {
-  pdf(
-    file.path(diag.dir, paste0(y, "_diagnostics.pdf")),
-    width = 11, height = 8.5
-  )
-  
-  tryCatch({
-    plot(performance::check_model(models[[y]], panel = TRUE))
-  }, finally = dev.off())
-}
+# Write one diagnostic PDF per response. Close it even if plotting fails.
+pdf(file.path(diag.dir, "Q1_diagnostics.pdf"), width = 11, height = 8.5)
 
-# 5e. Assess singularities
+tryCatch({
+  for (y in names(models)) {
+    message("Writing diagnostics for ", y)
+    
+    checks <- "all"
+    if (y == "HBAbundance") {
+      # Skip the influence plot that failed for honey bee abundance.
+      checks <- c(
+        "vif", "qq", "normality", "linearity", "homogeneity",
+        "reqq", "pp_check", "binned_residuals", "overdispersion"
+      )
+    }
+    
+    plot(performance::check_model(models[[y]], panel = TRUE, check = checks))
+  }
+}, finally = dev.off())
+
+# Assess singularities
 singular_ys <- model_checks$response[model_checks$singular]
 
 for (y in singular_ys) {
@@ -311,7 +252,7 @@ for (y in singular_ys) {
   print(lme4::VarCorr(models[[y]]))
 }
 
-# 6. Plot Q1 climate effects ------------------------------------------
+## 5c. Plot Q1 climate effects ------------------------------------------
 
 geography <- read.csv(
   file.path(dir.SI_saved, "data", "relational", "original", "geography.csv"))
@@ -341,130 +282,11 @@ response_labels <- c(
   MeanFloweringPlant = "Quadrat flowering plants"
 )
 
-## 6a. coefficient plots ----
-# Exponentiate the count-model slopes and intervals to get expected count ratios.
-# Shannon estimates are changes on the original scale.
-response_labels <- pollinator_labels
-response_labels[c("VisitedFloral", "MeanFloral", "MeanFloweringPlant")] <- c(
-  "Visited plants",
-  "Quadrat flowers",
-  "Quadrat flowering plants"
-)
-
-axis_labels <- c(
-  abundance = "Change in abundance per 1-unit increase in PC score",
-  richness  = "Change in richness per 1-unit increase in PC score",
-  shannon   = "Change in Shannon diversity per 1-unit increase in PC score"
-)
-
-fixed_coefs <- function(model) {
-  if (inherits(model, "glmmTMB")) {
-    return(summary(model)$coefficients$cond)
-  }
-  coef(summary(model))
-}
-
-for (group in names(model_groups)) {
-  group_models <- model_groups[[group]]
-  effects <- list()
-  
-  for (y in names(group_models)) {
-    model <- group_models[[y]]
-    coefs <- fixed_coefs(model)[c("PC1", "PC2"), , drop = FALSE]
-    
-    group_key <- sub("(Abundance|Richness|Diversity)$", "", y)
-    if (!group_key %in% names(response_labels)) {
-      stop("Missing plot label for ", y, " (key: ", group_key, ")")
-    }
-    
-    link <- family(model)$link
-    if (!link %in% c("identity", "log")) {
-      stop("Unsupported link for ", y, ": ", link)
-    }
-    
-    effects[[y]] <- data.frame(
-      taxon = response_labels[[group_key]],
-      component = rownames(coefs),
-      estimate = coefs[, "Estimate"],
-      lower = coefs[, "Estimate"] - 1.96 * coefs[, "Std. Error"],
-      upper = coefs[, "Estimate"] + 1.96 * coefs[, "Std. Error"],
-      link = link,
-      row.names = NULL
-    )
-  }
-  
-  group_effects <- bind_rows(effects)
-  
-  for (link in unique(group_effects$link)) {
-    plot_data <- group_effects[group_effects$link == link, ]
-    plot_data$taxon <- factor(
-      plot_data$taxon,
-      levels = rev(unique(plot_data$taxon))
-    )
-    
-    reference <- 0
-    axis_label <- axis_labels[[group]]
-    file_group <- group
-    
-    if (link == "log") {
-      plot_data$estimate <- exp(plot_data$estimate)
-      plot_data$lower <- exp(plot_data$lower)
-      plot_data$upper <- exp(plot_data$upper)
-      reference <- 1
-      axis_label <- paste0(
-        "Expected ", group, " ratio per 1-unit increase in PC score"
-      )
-    }
-    
-    if (group == "abundance" && link == "identity") {
-      file_group <- "abundance_original_scale"
-    }
-    
-    dodge <- position_dodge(width = 0.5)
-    
-    p <- ggplot(plot_data, aes(taxon, estimate, color = component)) +
-      geom_hline(
-        yintercept = reference, linetype = "dashed", color = "grey50"
-      ) +
-      geom_errorbar(
-        aes(ymin = lower, ymax = upper),
-        position = dodge, width = 0.15, linewidth = 0.6
-      ) +
-      geom_point(aes(shape = component), position = dodge, size = 2.8) +
-      coord_flip() +
-      scale_color_manual(values = c(PC1 = "#0072B2", PC2 = "#B64F00")) +
-      scale_shape_manual(values = c(PC1 = 16, PC2 = 17)) +
-      labs(
-        x = NULL,
-        y = axis_label,
-        color = NULL,
-        shape = NULL,
-        caption = paste(
-          "Points show fixed-effect estimates.",
-          "Bars show approximate 95% Wald intervals."
-        )
-      ) +
-      theme_classic(base_size = 12) +
-      theme(
-        legend.position = "top",
-        plot.caption = element_text(hjust = 0)
-      )
-    
-    print(p)
-    ggsave(
-      file.path(plot.dir, paste0("Q1_", file_group, "_effects.pdf")),
-      plot = p, width = 8, height = 4.8
-    )
-  }
-}
-
-## 6b. scatterplots ----
-# Plot observed points and a fixed-effect fitted line for each climate axis.
+# Plot the observations used in each model and the fixed-effect fitted curve.
 # The shaded band is an approximate pointwise 95% CI for the fitted mean.
 
 panel_order <- c(
-  "BeeSyrphLep", "Bee", "Syrphid", "ButterflyHawk",
-  "HB", "Bombus", "NonBombusHB", "VisitedFloral",
+  "BeeSyrphLep", "Bee", "Bombus", "HB", "NonBombusHB", "Syrphid", "ButterflyHawk",
   "MeanFloral", "MeanFloweringPlant"
 )
 
@@ -497,13 +319,6 @@ for (group in names(model_groups)) {
         model <- group_models[[y]]
         dat <- model.frame(model)
         
-        if (!"Year" %in% names(dat)) {
-          # Recover the survey year for the rows used to fit the model.
-          survey_rows <- match(rownames(dat), rownames(analysis))
-          stopifnot(!anyNA(survey_rows))
-          dat$Year <- analysis$Year[survey_rows]
-        }
-        
         stopifnot(all(as.character(dat$Site) %in% site_order))
         dat$Site <- factor(dat$Site, levels = site_order)
         dat$Year <- factor(dat$Year, levels = year_levels)
@@ -514,7 +329,7 @@ for (group in names(model_groups)) {
         }
         y_label <- paste(response_labels[[group_key]], response_suffix)
         
-        # Vary the plotted PC across the range used in this model.
+        # Vary the plotted PC and hold the other PC at its model-data mean.
         scores <- seq(min(dat[[pc]]), max(dat[[pc]]), length.out = 100)
         new_data <- data.frame(
           PC1 = rep(mean(dat$PC1), length(scores)),
@@ -522,26 +337,18 @@ for (group in names(model_groups)) {
         )
         new_data[[pc]] <- scores
         
-        coefs <- fixed_coefs(model)
-        fixed_vcov <- if (inherits(model, "glmmTMB")) {
-          as.matrix(vcov(model)$cond)
-        } else {
-          as.matrix(vcov(model))
-        }
-        
         # Compute the fixed-effect fit and interval on the link scale.
         X <- model.matrix(~ PC1 + PC2, data = new_data)
-        terms <- colnames(X)
-        beta <- coefs[terms, "Estimate"]
-        fixed_vcov <- fixed_vcov[terms, terms, drop = FALSE]
+        coef_names <- colnames(X)
+        beta <- lme4::fixef(model)[coef_names]
+        fixed_vcov <- as.matrix(vcov(model))[coef_names, coef_names, drop = FALSE]
         
         fit_link <- drop(X %*% beta)
         fit_se <- sqrt(rowSums((X %*% fixed_vcov) * X))
         inverse_link <- family(model)$linkinv
         
-        estimate <- coefs[pc, "Estimate"]
-        cutoff <- 1.96 * coefs[pc, "Std. Error"]
-        line_type <- if (abs(estimate) > cutoff) "solid" else "dashed"
+        pc_se <- sqrt(fixed_vcov[pc, pc])
+        line_type <- if (abs(beta[[pc]]) > 1.96 * pc_se) "solid" else "dashed"
         
         fit_data <- data.frame(
           score = scores,
@@ -586,10 +393,10 @@ for (group in names(model_groups)) {
       ) +
         patchwork::plot_annotation(
           caption = paste(
-            "Shading shows approximate pointwise 95% confidence intervals",
-            "for the fitted means.",
-            "Solid lines indicate a PC coefficient whose 95% Wald interval",
-            "excludes zero."
+            "Shading shows approximate pointwise 95% confidence intervals for the fitted means.",
+            "The other climate PC is held at its mean among observations used in that model.",
+            "Solid lines indicate a PC coefficient whose 95% Wald interval excludes zero.",
+            sep = "\n"
           )
         )
       
@@ -598,69 +405,183 @@ for (group in names(model_groups)) {
   }, finally = dev.off())
 }
 
+# 6. Fit and Plot Q2 Models --------------------------------------------------
 
-# # 6. Fit Q2 response models -----------------------------------------
-# 
-# q2_ys <- c(
-#   "functional.complementarity.HL", "functional.complementarity.LL",
-#   "FunRedundancy.Pols", "FunRedundancy.Plants",
-#   "mean.number.of.links.HL", "mean.number.of.links.LL"
-# )
+model.dir <- file.path(dir.EC, "results", "climate_models", "Q2")
+plot.dir <- file.path(model.dir, "plotting")
+diag.dir <- file.path(model.dir, "diagnostics")
 
-# ys <- q2_ys
-#
-# model.dir <- file.path(
-#   dir.EC, "results", "climate_models", guild, "Q2"
-# )
-# dir.create(model.dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(model.dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(plot.dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(diag.dir, recursive = TRUE, showWarnings = FALSE)
 
-# models <- list()
-# 
-# for (y in ys) {
-#   
-#   print(y)
-#   
-#   # Keep complete observations for this particular model.
-#   needed <- c(y, "PC1", "PC2", "Site", "Year")
-#   dat <- analysis[complete.cases(analysis[, needed]), ]
-#   
-#   print(nrow(dat))
-#   
-#   equation <- as.formula(
-#     paste(y, "~ PC1 + PC2 + (1 | Site) + (1 | Year)")
-#   )
-#   
-#   model <- lmer(equation, data = dat)
-#   
-#   print(coef(summary(model)))       # Fixed-effect estimates and standard errors
-#   print(as.data.frame(VarCorr(model)))  # Random-effect and residual variances
-#   
-#   models[[y]] <- model
-#   
-#   saveRDS(
-#     model,
-#     file.path(model.dir, paste0(y, "_model.rds"))
-#   )
-# }
+## 6a. Fit the Q2 models ----------------------------------------------------
 
-# 7. Check model diagnostics -----------------------------------------
+q2_labels <- c(
+  zfunctional.complementarity.HL = "Pollinator complementarity",
+  zfunctional.complementarity.LL = "Plant complementarity",
+  zFunRedundancy.Pols = "Pollinator redundancy",
+  zFunRedundancy.Plants = "Plant redundancy",
+  zmean.number.of.links.HL = "Pollinator mean number of links",
+  zmean.number.of.links.LL = "Plant mean number of links"
+)
 
-# pdf(file.path(model.dir, "model_diagnostics.pdf"), width = 11, height = 8.5)
-# tryCatch({
-#   for (y in names(models)) {
-#     plot(performance::check_model(models[[y]], panel = TRUE))
-#   }
-# }, finally = dev.off())
-# 
-# model_checks <- data.frame(
-#   response = names(models),
-#   n = vapply(models, nobs, numeric(1)),
-#   singular = vapply(models, lme4::isSingular, logical(1))
-# )
-# 
-# print(model_checks)
-# write.csv(
-#   model_checks,
-#   file.path(model.dir, "model_checks.csv"),
-#   row.names = FALSE
-# )
+stopifnot(
+  all(c(q2_ys, "PC1", "PC2", "Site", "Year") %in% names(analysis)),
+  all(q2_ys %in% names(q2_labels))
+)
+
+q2_models <- list()
+
+for (y in q2_ys) {
+  needed <- c(y, "PC1", "PC2", "Site", "Year")
+  keep <- complete.cases(analysis[, needed]) & is.finite(analysis[[y]])
+  dat <- analysis[keep, needed, drop = FALSE]
+  
+  message("Q2 | ", y, " | n = ", nrow(dat))
+  
+  equation <- as.formula(
+    paste(y, "~ PC1 + PC2 + (1 | Site) + (1 | Year)")
+  )
+  
+  model <- lme4::lmer(equation, data = dat)
+  
+  print(coef(summary(model)))
+  q2_models[[y]] <- model
+  saveRDS(model, file.path(diag.dir, paste0("Q2_", y, "_model.rds")))
+}
+
+## 6b. Checks and diagnostic PDFs -------------------------------------------
+
+q2_checks <- data.frame(
+  response = names(q2_models),
+  n = vapply(q2_models, nobs, numeric(1)),
+  singular = vapply(q2_models, performance::check_singularity, logical(1)),
+  site_sd = vapply(q2_models, function(model) {
+    as.numeric(attr(lme4::VarCorr(model)[["Site"]], "stddev"))
+  }, numeric(1)),
+  year_sd = vapply(q2_models, function(model) {
+    as.numeric(attr(lme4::VarCorr(model)[["Year"]], "stddev"))
+  }, numeric(1))
+)
+
+print(q2_checks)
+write.csv(
+  q2_checks,
+  file.path(diag.dir, "Q2_model_checks.csv"),
+  row.names = FALSE
+)
+
+for (y in names(q2_models)) {
+  message("Writing Q2 diagnostics for ", y)
+  
+  pdf(
+    file.path(diag.dir, paste0("Q2_", y, "_diagnostics.pdf")),
+    width = 11, height = 8.5
+  )
+  
+  tryCatch({
+    diagnostics <- performance::check_model(q2_models[[y]], panel = TRUE)
+    print(plot(diagnostics))
+  }, error = function(err) {
+    warning("Q2 diagnostics failed for ", y, ": ", conditionMessage(err))
+  }, finally = dev.off())
+}
+
+## 6c. Plot Q2 climate effects ----------------------------------------------
+
+q2_panel_order <- c(
+  "zfunctional.complementarity.HL",
+  "zFunRedundancy.Pols",
+  "zmean.number.of.links.HL",
+  "zfunctional.complementarity.LL",
+  "zFunRedundancy.Plants",
+  "zmean.number.of.links.LL"
+)
+
+pdf(
+  file.path(plot.dir, "Q2_scatterplots.pdf"),
+  width = 14, height = 8
+)
+
+tryCatch({
+  for (pc in c("PC1", "PC2")) {
+    response_plots <- list()
+    
+    for (y in q2_panel_order)  {
+      model <- q2_models[[y]]
+      dat <- model.frame(model)
+      
+      stopifnot(all(as.character(dat$Site) %in% site_order))
+      dat$Site <- factor(dat$Site, levels = site_order)
+      dat$Year <- factor(dat$Year, levels = year_levels)
+      
+      # Vary the plotted PC and hold the other PC at its model-data mean.
+      scores <- seq(min(dat[[pc]]), max(dat[[pc]]), length.out = 100)
+      new_data <- data.frame(
+        PC1 = rep(mean(dat$PC1), length(scores)),
+        PC2 = rep(mean(dat$PC2), length(scores))
+      )
+      new_data[[pc]] <- scores
+      
+      X <- model.matrix(~ PC1 + PC2, data = new_data)
+      coef_names <- colnames(X)
+      beta <- lme4::fixef(model)[coef_names]
+      fixed_vcov <- as.matrix(vcov(model))[coef_names, coef_names, drop = FALSE]
+      
+      fitted <- drop(X %*% beta)
+      fit_se <- sqrt(rowSums((X %*% fixed_vcov) * X))
+      pc_se <- sqrt(fixed_vcov[pc, pc])
+      line_type <- if (abs(beta[[pc]]) > 1.96 * pc_se) "solid" else "dashed"
+      
+      fit_data <- data.frame(
+        score = scores,
+        fitted = fitted,
+        lower = fitted - 1.96 * fit_se,
+        upper = fitted + 1.96 * fit_se
+      )
+      
+      response_plots[[y]] <- ggplot(dat) +
+        geom_hline(yintercept = 0, linetype = "dotted", color = "gray55") +
+        geom_ribbon(
+          data = fit_data,
+          aes(x = score, ymin = lower, ymax = upper),
+          fill = "gray80", alpha = 0.4
+        ) +
+        geom_point(
+          aes(x = .data[[pc]], y = .data[[y]], color = Site, shape = Year),
+          alpha = 0.7, size = 2, show.legend = TRUE
+        ) +
+        geom_line(
+          data = fit_data,
+          aes(x = score, y = fitted),
+          color = "black", linewidth = 1, linetype = line_type
+        ) +
+        scale_color_discrete(limits = site_order, drop = FALSE) +
+        scale_shape_discrete(limits = year_levels, drop = FALSE) +
+        labs(
+          x = pc,
+          y = "Null-standardized z-score",
+          title = q2_labels[[y]],
+          color = "Site (N to S)",
+          shape = "Year"
+        ) +
+        theme_minimal(base_size = 12) +
+        theme(panel.grid.minor = element_blank())
+    }
+    
+    combined <- patchwork::wrap_plots(
+      response_plots, ncol = 3, guides = "collect"
+    ) +
+      patchwork::plot_annotation(
+        caption = paste(
+          "Shading shows approximate pointwise 95% confidence intervals for the fitted means.",
+          "The other climate PC is held at its mean among observations used in that model.",
+          "Solid fitted lines indicate a PC coefficient whose 95% Wald interval excludes zero.",
+          sep = "\n"
+        )
+      )
+    
+    print(combined & theme(legend.position = "right"))
+  }
+}, finally = dev.off())
