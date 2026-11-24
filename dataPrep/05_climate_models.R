@@ -185,7 +185,7 @@ for (i in seq_len(nrow(responses))) {
   if (group == "abundance") {
     model <- lme4::glmer.nb(equation, data = dat)
   } else {
-    model <- lme4::lmer(equation, data = dat)
+    model <- lmerTest::lmer(equation, data = dat)
   }
   
   print(coef(summary(model)))
@@ -293,6 +293,18 @@ panel_order <- c(
 year_levels <- sort(unique(as.character(analysis$Year[!is.na(analysis$Year)])))
 ncol_panels <- 4
 
+q1_pvalues <- lapply(models, function(model) {
+  if (inherits(model, "glmerMod")) {
+    coefficients <- coef(summary(model))
+    return(coefficients[c("PC1", "PC2"), "Pr(>|z|)"])
+  }
+  
+  coefficients <- coef(summary(model, ddf = "Satterthwaite"))
+  coefficients[c("PC1", "PC2"), "Pr(>|t|)"]
+})
+
+print(do.call(rbind, q1_pvalues))
+
 for (group in names(model_groups)) {
   group_models <- model_groups[[group]]
   if (length(group_models) == 0L) next
@@ -347,8 +359,8 @@ for (group in names(model_groups)) {
         fit_se <- sqrt(rowSums((X %*% fixed_vcov) * X))
         inverse_link <- family(model)$linkinv
         
-        pc_se <- sqrt(fixed_vcov[pc, pc])
-        line_type <- if (abs(beta[[pc]]) > 1.96 * pc_se) "solid" else "dashed"
+        p_value <- q1_pvalues[[y]][[pc]]
+        line_type <- if (p_value < 0.05) "solid" else "dashed"
         
         fit_data <- data.frame(
           score = scores,
@@ -395,7 +407,11 @@ for (group in names(model_groups)) {
           caption = paste(
             "Shading shows approximate pointwise 95% confidence intervals for the fitted means.",
             "The other climate PC is held at its mean among observations used in that model.",
-            "Solid lines indicate a PC coefficient whose 95% Wald interval excludes zero.",
+            if (group == "abundance") {
+              "Solid lines indicate slopes with two-sided Wald z-test p < 0.05."
+            } else {
+              "Solid lines indicate slopes with two-sided Satterthwaite p < 0.05."
+            },
             sep = "\n"
           )
         )
@@ -444,7 +460,7 @@ for (y in q2_ys) {
     paste(y, "~ PC1 + PC2 + (1 | Site) + (1 | Year)")
   )
   
-  model <- lme4::lmer(equation, data = dat)
+  model <- lmerTest::lmer(equation, data = dat)
   
   print(coef(summary(model)))
   q2_models[[y]] <- model
@@ -499,6 +515,14 @@ q2_panel_order <- c(
   "zmean.number.of.links.LL"
 )
 
+q2_pvalues <- lapply(q2_models, function(model) {
+  coefficients <- coef(summary(model, ddf = "Satterthwaite"))
+  coefficients[c("PC1", "PC2"), "Pr(>|t|)"]
+})
+
+# Inspect which slopes meet the cutoff.
+print(do.call(rbind, q2_pvalues))
+
 pdf(
   file.path(plot.dir, "Q2_scatterplots.pdf"),
   width = 14, height = 8
@@ -531,8 +555,8 @@ tryCatch({
       
       fitted <- drop(X %*% beta)
       fit_se <- sqrt(rowSums((X %*% fixed_vcov) * X))
-      pc_se <- sqrt(fixed_vcov[pc, pc])
-      line_type <- if (abs(beta[[pc]]) > 1.96 * pc_se) "solid" else "dashed"
+      p_value <- q2_pvalues[[y]][[pc]]
+      line_type <- if (p_value < 0.05) "solid" else "dashed"
       
       fit_data <- data.frame(
         score = scores,
@@ -576,8 +600,9 @@ tryCatch({
       patchwork::plot_annotation(
         caption = paste(
           "Shading shows approximate pointwise 95% confidence intervals for the fitted means.",
-          "The other climate PC is held at its mean among observations used in that model.",
-          "Solid fitted lines indicate a PC coefficient whose 95% Wald interval excludes zero.",
+          "The other climate PC is held at its mean among observations used in each model.",
+          "Solid fitted lines indicate slopes with two-sided Satterthwaite p < 0.05.",
+          "Dashed fitted lines indicate slopes with p >= 0.05. The dotted horizontal line marks the null expectation (z = 0).",
           sep = "\n"
         )
       )
