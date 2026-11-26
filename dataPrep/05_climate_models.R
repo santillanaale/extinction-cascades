@@ -1,4 +1,11 @@
-rm(list=ls())
+# 05_climate_models.R
+# Climate (PC1, PC2) effects on:
+#   Q1 - community abundance, richness, and Shannon diversity
+#   Q2 - plant-pollinator network metrics
+#   Q3 - extinction-cascade robustness
+# Functions live in 05_climate_models_helpers.R.
+
+rm(list = ls())
 setwd("~/")
 source("lab_paths.R")
 
@@ -13,90 +20,24 @@ dir.SI <- file.path(local.path, "skyIslands")
 dir.EC <- file.path(local.path, "extinction-cascades")
 dir.SI_saved <- file.path(local.path, "skyIslands_saved")
 
+source(file.path(dir.EC, "dataPrep", "src", "05_climate_models_helpers.R"))
+
 keys <- c("Site", "Year", "SampleRound")
 
-# 1. Read community summaries ----------------------------------------
 
-community <- read.csv(
-  file.path(dir.SI, "data", "sitestats.csv"),
-  colClasses = c(SampleRound = "character")
-)
+# 0. Configuration ---------------------------------------------------------
+# Everything you might edit (responses, labels, panel order) lives here.
 
-# 2. Read Q2, Q3, and climate outputs --------------------------------
-
-load(file.path(
-  dir.SI, "analysis", "network", "saved",
-  "corMets_PlantPollinator_YearSR_BeesSyrphidsButterflyHawk_N100.Rdata" 
-))
-
-network_metrics <- cor.dats
-
-# robustness_scores <- read.csv(
-#   "PATH_TO_ROBUSTNESS_SCORES.csv",
-#   colClasses = c(SampleRound = "character")
-# )
-
-climate <- read.csv(
-  file.path(dir.EC, "data", "exposure.csv"),
-  colClasses = c(SampleRound = "character")
-) %>%
-  select(all_of(keys), PC1, PC2)
-
-# 3. Assemble Q1/Q2 analysis table -----------------------------------
-
-# Keep all community rows.
-analysis <- community %>%
-  left_join(
-    network_metrics,
-    by = keys,
-    relationship = "one-to-one"
-  ) %>%
-  left_join(
-    climate,
-    by = keys,
-    relationship = "one-to-one"
-  ) %>%
-  mutate(
-    Site = factor(Site),
-    Year = factor(Year)
-  )
-
-cat("\n--- Analysis dimensions ---\n")
-print(dim(analysis))
-
-cat("\n--- RP 2018 round 1 ---\n")
-print(
-  analysis %>%
-    filter(Site == "RP", Year == "2018", SampleRound == "1") %>%
-    select(all_of(keys), PollAbundance, PC1, PC2)
-)
-
-stopifnot(
-  nrow(analysis) == nrow(community),
-  all(is.finite(analysis$PC1)),
-  all(is.finite(analysis$PC2))
-)
-
-# Select the model inputs
+## Q1 responses
 q1_abundance_ys <- c(
-  "BeeAbundance",
-  "SyrphidAbundance",
-  "HBAbundance",
-  "BombusAbundance",
-  "NonBombusHBAbundance",
-  "ButterflyHawkAbundance",
-  "BeeSyrphLepAbundance",
-  "MeanFloralAbundance",
-  "MeanFloweringPlantAbundance"
+  "BeeAbundance", "SyrphidAbundance", "HBAbundance", "BombusAbundance",
+  "NonBombusHBAbundance", "ButterflyHawkAbundance", "BeeSyrphLepAbundance",
+  "MeanFloralAbundance", "MeanFloweringPlantAbundance"
 )
 
 q1_richness_ys <- c(
-  "BeeRichness",
-  "SyrphidRichness",
-  "BombusRichness",
-  "ButterflyHawkRichness",
-  "BeeSyrphLepRichness",
-  "MeanFloralRichness"
+  "BeeRichness", "SyrphidRichness", "BombusRichness",
+  "ButterflyHawkRichness", "BeeSyrphLepRichness", "MeanFloralRichness"
 )
 
 # Each Shannon response is paired with the richness of the same group.
@@ -111,328 +52,44 @@ shannon_richness <- c(
 
 q1_shannon_ys <- c(names(shannon_richness), "MeanFloweringPlantDiversity")
 
-q1_ys <- c(q1_abundance_ys, q1_richness_ys, q1_shannon_ys)
+q1_fd_ys <- c("BeeFDis", "BeeFEve", "BeeFDiv")
 
-q2_ys <- c(
-  "zfunctional.complementarity.HL",
-  "zfunctional.complementarity.LL",
-  "zFunRedundancy.Plants",
-  "zFunRedundancy.Pols",
-  "zmean.number.of.links.HL",
-  "zmean.number.of.links.LL"
-)
+q1_ys <- c(q1_abundance_ys, q1_richness_ys, q1_shannon_ys, q1_fd_ys)
 
-analysis_cols <- unique(c(
-  keys, "PC1", "PC2",
-  q1_ys, unname(shannon_richness),
-  q2_ys
-))
-
-analysis <- analysis %>%
-  select(all_of(analysis_cols))
-
-cat("\n--- Analysis dimensions ---\n")
-print(dim(analysis))
-
-analysis_file <- file.path(dir.EC, "data", "analysis.csv")
-
-write.csv(analysis, analysis_file, row.names = FALSE)
-
-# 4. Assemble Q3 analysis table --------------------------------------
-
-# robustness_analysis <- robustness_scores %>%
-#   left_join(
-#     analysis,
-#     by = keys,
-#     relationship = "many-to-one"
-#   )
-
-# 5. Fit and Plot Q1 Models  --------------------------------------------------
-
-# Store fitted models and diagnostics separately from the figures.
-model.dir <- file.path(dir.EC, "results", "climate_models", "Q1")
-plot.dir <- file.path(model.dir, "plotting")
-diag.dir <- file.path(model.dir, "diagnostics")
-
-dir.create(model.dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(plot.dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(diag.dir, recursive = TRUE, showWarnings = FALSE)
-
-## 5a. Fit the Q1 models --------------------------------------------------
-responses <- stack(list(
-  abundance = q1_abundance_ys,
-  richness = q1_richness_ys,
-  shannon = q1_shannon_ys
-))
-
-model_groups <- list(
-  abundance = list(),
-  richness = list(),
-  shannon = list()
-)
-
-for (i in seq_len(nrow(responses))) {
-  y <- responses$values[i]
-  group <- as.character(responses$ind[i])
-  needed <- c(y, "PC1", "PC2", "Site", "Year")
-  dat <- analysis[complete.cases(analysis[, needed]), ]
-  
-  message(group, " | ", y, " | n = ", nrow(dat))
-  equation <- as.formula(
-    paste(y, "~ PC1 + PC2 + (1 | Site) + (1 | Year)")
-  )
-  
-  if (group == "abundance") {
-    model <- lme4::glmer.nb(equation, data = dat)
-  } else {
-    model <- lmerTest::lmer(equation, data = dat)
-  }
-  
-  print(coef(summary(model)))
-  model_groups[[group]][[y]] <- model
-  saveRDS(model, file.path(diag.dir, paste0(y, "_model.rds")))
-}
-
-# Keep these names for code that uses the individual model lists.
-abundance_models <- model_groups[["abundance"]]
-richness_models <- model_groups[["richness"]]
-shannon_models <- model_groups[["shannon"]]
-
-## 5b. Checks and diagnostic PDFs -----------------------------------------
-# Combine the groups into one list, keeping the response names.
-models <- do.call(c, unname(model_groups))
-
-# Summarize sample size, singularity, and the Pearson dispersion ratio for counts.
-model_checks <- data.frame(
-  response = names(models),
-  group = rep(names(model_groups), lengths(model_groups)),
-  n = vapply(models, nobs, numeric(1)),
-  singular = vapply(models, performance::check_singularity, logical(1)),
-  pearson_dispersion = NA_real_
-)
-
-for (i in which(model_checks$group == "abundance")) {
-  model <- models[[i]]
-  model_checks$pearson_dispersion[i] <-
-    sum(residuals(model, type = "pearson")^2) / df.residual(model)
-}
-
-print(model_checks)
-write.csv(
-  model_checks,
-  file.path(diag.dir, "model_checks.csv"),
-  row.names = FALSE
-)
-
-# Write one diagnostic PDF per response. Close it even if plotting fails.
-pdf(file.path(diag.dir, "Q1_diagnostics.pdf"), width = 11, height = 8.5)
-
-tryCatch({
-  for (y in names(models)) {
-    message("Writing diagnostics for ", y)
-    
-    checks <- "all"
-    if (y == "HBAbundance") {
-      # Skip the influence plot that failed for honey bee abundance.
-      checks <- c(
-        "vif", "qq", "normality", "linearity", "homogeneity",
-        "reqq", "pp_check", "binned_residuals", "overdispersion"
-      )
-    }
-    
-    plot(performance::check_model(models[[y]], panel = TRUE, check = checks))
-  }
-}, finally = dev.off())
-
-# Assess singularities
-singular_ys <- model_checks$response[model_checks$singular]
-
-for (y in singular_ys) {
-  cat("\n", y, "\n", sep = "")
-  print(lme4::VarCorr(models[[y]]))
-}
-
-## 5c. Plot Q1 climate effects ------------------------------------------
-
-geography <- read.csv(
-  file.path(dir.SI_saved, "data", "relational", "original", "geography.csv"))
-
-# Order the site legend from north to south.
-site_order <- geography %>%
-  filter(!Site %in% c("JM", "CC", "SH")) %>%
-  group_by(Site) %>%
-  summarize(Lat = mean(Lat, na.rm = TRUE), .groups = "drop") %>%
-  arrange(desc(Lat)) %>%
-  pull(Site)
-
-pollinator_labels <- c(
+# Q1 plot labels: "Bee" in "BeeAbundance" is the response key.
+response_labels <- c(
   Bee = "Bees",
   Syrphid = "Hoverflies",
   HB = "Honey bees",
   Bombus = "Bumble bees",
   NonBombusHB = "Other bees",
   ButterflyHawk = "Butterflies and hawkmoths",
-  BeeSyrphLep = "Focal pollinators"
-)
-
-response_labels <- c(
-  pollinator_labels,
+  BeeSyrphLep = "Focal pollinators",
   VisitedFloral = "Visited plants",
   MeanFloral = "Quadrat flowers",
-  MeanFloweringPlant = "Quadrat flowering plants"
+  MeanFloweringPlant = "Quadrat flowering plants",
+  BeeFDis = "Bee functional dispersion (FDis)",
+  BeeFEve = "Bee functional evenness (FEve)",
+  BeeFDiv = "Bee functional divergence (FDiv)"
 )
 
-# Plot the observations used in each model and the fixed-effect fitted curve.
-# The shaded band is an approximate pointwise 95% CI for the fitted mean.
-
-panel_order <- c(
-  "BeeSyrphLep", "Bee", "Bombus", "HB", "NonBombusHB", "Syrphid", "ButterflyHawk",
-  "MeanFloral", "MeanFloweringPlant"
+q1_panel_order <- c(
+  "BeeSyrphLep", "Bee", "Bombus", "HB", "NonBombusHB", "Syrphid",
+  "ButterflyHawk", "MeanFloral", "MeanFloweringPlant", "BeeFDis",
+  "BeeFEve", "BeeFDiv"
 )
 
-year_levels <- sort(unique(as.character(analysis$Year[!is.na(analysis$Year)])))
-ncol_panels <- 4
+q1_suffix <- c(
+  abundance = "abundance", richness = "richness", shannon = "Shannon diversity", fd = ""
+)
 
-q1_pvalues <- lapply(models, function(model) {
-  if (inherits(model, "glmerMod")) {
-    coefficients <- coef(summary(model))
-    return(coefficients[c("PC1", "PC2"), "Pr(>|z|)"])
-  }
-  
-  coefficients <- coef(summary(model, ddf = "Satterthwaite"))
-  coefficients[c("PC1", "PC2"), "Pr(>|t|)"]
-})
+# The influence plot fails for honey bee abundance, so skip it there.
+q1_checks_without_influence <- c(
+  "vif", "qq", "normality", "linearity", "homogeneity",
+  "reqq", "pp_check", "binned_residuals", "overdispersion"
+)
 
-print(do.call(rbind, q1_pvalues))
-
-for (group in names(model_groups)) {
-  group_models <- model_groups[[group]]
-  if (length(group_models) == 0L) next
-  
-  response_suffix <- switch(
-    group,
-    abundance = "abundance",
-    richness = "richness",
-    shannon = "Shannon diversity"
-  )
-  
-  nrow_panels <- ceiling(length(group_models) / ncol_panels)
-  
-  pdf(
-    file.path(plot.dir, paste0("Q1_", group, "_scatterplots.pdf")),
-    width = 14, height = max(8, 3.5 * nrow_panels)
-  )
-  
-  tryCatch({
-    for (pc in c("PC1", "PC2")) {
-      response_plots <- list()
-      
-      for (y in names(group_models)) {
-        model <- group_models[[y]]
-        dat <- model.frame(model)
-        
-        stopifnot(all(as.character(dat$Site) %in% site_order))
-        dat$Site <- factor(dat$Site, levels = site_order)
-        dat$Year <- factor(dat$Year, levels = year_levels)
-        
-        group_key <- sub("(Abundance|Richness|Diversity)$", "", y)
-        if (!group_key %in% names(response_labels)) {
-          stop("Missing plot label for ", y, " (key: ", group_key, ")")
-        }
-        y_label <- paste(response_labels[[group_key]], response_suffix)
-        
-        # Vary the plotted PC and hold the other PC at its model-data mean.
-        scores <- seq(min(dat[[pc]]), max(dat[[pc]]), length.out = 100)
-        new_data <- data.frame(
-          PC1 = rep(mean(dat$PC1), length(scores)),
-          PC2 = rep(mean(dat$PC2), length(scores))
-        )
-        new_data[[pc]] <- scores
-        
-        # Compute the fixed-effect fit and interval on the link scale.
-        X <- model.matrix(~ PC1 + PC2, data = new_data)
-        coef_names <- colnames(X)
-        beta <- lme4::fixef(model)[coef_names]
-        fixed_vcov <- as.matrix(vcov(model))[coef_names, coef_names, drop = FALSE]
-        
-        fit_link <- drop(X %*% beta)
-        fit_se <- sqrt(rowSums((X %*% fixed_vcov) * X))
-        inverse_link <- family(model)$linkinv
-        
-        p_value <- q1_pvalues[[y]][[pc]]
-        line_type <- if (p_value < 0.05) "solid" else "dashed"
-        
-        fit_data <- data.frame(
-          score = scores,
-          fitted = inverse_link(fit_link),
-          lower = inverse_link(fit_link - 1.96 * fit_se),
-          upper = inverse_link(fit_link + 1.96 * fit_se)
-        )
-        
-        response_plots[[y]] <- ggplot(dat) +
-          geom_ribbon(
-            data = fit_data,
-            aes(x = score, ymin = lower, ymax = upper),
-            fill = "gray80", alpha = 0.4
-          ) +
-          geom_point(
-            aes(x = .data[[pc]], y = .data[[y]], color = Site, shape = Year),
-            alpha = 0.7, size = 2,
-            show.legend = TRUE
-          ) +
-          geom_line(
-            data = fit_data,
-            aes(x = score, y = fitted),
-            color = "black", linewidth = 1, linetype = line_type
-          ) +
-          scale_color_discrete(limits = site_order, drop = FALSE) +
-          scale_shape_discrete(limits = year_levels, drop = FALSE) +
-          labs(x = pc, y = y_label, color = "Site (N to S)", shape = "Year") +
-          theme_minimal(base_size = 12) +
-          theme(
-            panel.grid.minor = element_blank(),
-            plot.margin = margin(8, 12, 8, 8)
-          )
-      }
-      
-      panel_groups <- sub(
-        "(Abundance|Richness|Diversity)$", "", names(response_plots)
-      )
-      response_plots <- response_plots[order(match(panel_groups, panel_order))]
-      
-      combined <- patchwork::wrap_plots(
-        response_plots, ncol = ncol_panels, guides = "collect"
-      ) +
-        patchwork::plot_annotation(
-          caption = paste(
-            "Shading shows approximate pointwise 95% confidence intervals for the fitted means.",
-            "The other climate PC is held at its mean among observations used in that model.",
-            if (group == "abundance") {
-              "Solid lines indicate slopes with two-sided Wald z-test p < 0.05."
-            } else {
-              "Solid lines indicate slopes with two-sided Satterthwaite p < 0.05."
-            },
-            sep = "\n"
-          )
-        )
-      
-      print(combined & theme(legend.position = "right"))
-    }
-  }, finally = dev.off())
-}
-
-# 6. Fit and Plot Q2 Models --------------------------------------------------
-
-model.dir <- file.path(dir.EC, "results", "climate_models", "Q2")
-plot.dir <- file.path(model.dir, "plotting")
-diag.dir <- file.path(model.dir, "diagnostics")
-
-dir.create(model.dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(plot.dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(diag.dir, recursive = TRUE, showWarnings = FALSE)
-
-## 6a. Fit the Q2 models ----------------------------------------------------
-
+## Q2 responses
 q2_labels <- c(
   zfunctional.complementarity.HL = "Pollinator complementarity",
   zfunctional.complementarity.LL = "Plant complementarity",
@@ -442,171 +99,345 @@ q2_labels <- c(
   zmean.number.of.links.LL = "Plant mean number of links"
 )
 
+q2_ys <- c(
+  "zfunctional.complementarity.HL", "zfunctional.complementarity.LL",
+  "zFunRedundancy.Plants", "zFunRedundancy.Pols",
+  "zmean.number.of.links.HL", "zmean.number.of.links.LL"
+)
+
+q2_panel_order <- c(
+  "zfunctional.complementarity.HL", "zFunRedundancy.Pols",
+  "zmean.number.of.links.HL", "zfunctional.complementarity.LL",
+  "zFunRedundancy.Plants", "zmean.number.of.links.LL"
+)
+
+## Q3 scenarios
+q3_labels <- c(
+  abundance_low = "Rare plants first",
+  abundance_high = "Dominant plants first",
+  degree_low = "Specialist plants first",
+  degree_high = "Generalist plants first",
+  scm_random_plant = "Random plant removal",
+  scm_dominant_plant = "Abundance-weighted plant removal"
+)
+
+# "BeeAbundance" -> "Bee"; used to look up labels and panel order.
+response_key <- function(y) sub("(Abundance|Richness|Diversity)$", "", y)
+
+q1_y_label <- function(y, suffix) {
+  key <- response_key(y)
+  if (!key %in% names(response_labels)) {
+    stop("Missing plot label for ", y, " (key: ", key, ")")
+  }
+  trimws(paste(response_labels[[key]], suffix))
+}
+
+
+# 1. Read inputs -----------------------------------------------------------
+
+community <- read_keyed_csv(file.path(dir.SI, "data", "sitestats.csv"))
+
+load(file.path(
+  dir.SI, "analysis", "network", "saved",
+  "corMets_PlantPollinator_YearSR_BeesSyrphidsButterflyHawk_N100.Rdata"
+))
+network_metrics <- cor.dats
+
+robustness_scores <- read_keyed_csv(
+  file.path(dir.EC, "data", "YearSR_robustness_scores.csv")
+) %>%
+  mutate(Year = factor(Year))
+
+climate <- read_keyed_csv(file.path(dir.EC, "data", "exposure.csv")) %>%
+  select(all_of(keys), PC1, PC2)
+
+
+# 2. Assemble the Q1/Q2 analysis table -------------------------------------
+
+# Keep all community rows.
+analysis <- community %>%
+  left_join(network_metrics, by = keys, relationship = "one-to-one") %>%
+  left_join(climate, by = keys, relationship = "one-to-one") %>%
+  mutate(Site = factor(Site), Year = factor(Year))
+
+cat("\n--- Analysis dimensions ---\n")
+print(dim(analysis))
+
+cat("\n--- RP 2018 round 1 ---\n")
+print(
+  analysis %>%
+    filter(Site == "RP", Year == "2018", SampleRound == "1") %>%
+    select(all_of(keys), PollAbundance, PC1, PC2)
+)
+
 stopifnot(
+  nrow(analysis) == nrow(community),
+  all(is.finite(analysis$PC1)),
+  all(is.finite(analysis$PC2)),
   all(c(q2_ys, "PC1", "PC2", "Site", "Year") %in% names(analysis)),
   all(q2_ys %in% names(q2_labels))
 )
 
-q2_models <- list()
+analysis <- analysis %>%
+  select(all_of(unique(c(
+    keys, "PC1", "PC2", q1_ys, unname(shannon_richness), q2_ys
+  ))))
 
-for (y in q2_ys) {
-  needed <- c(y, "PC1", "PC2", "Site", "Year")
-  keep <- complete.cases(analysis[, needed]) & is.finite(analysis[[y]])
-  dat <- analysis[keep, needed, drop = FALSE]
-  
-  message("Q2 | ", y, " | n = ", nrow(dat))
-  
-  equation <- as.formula(
-    paste(y, "~ PC1 + PC2 + (1 | Site) + (1 | Year)")
+cat("\n--- Analysis dimensions ---\n")
+print(dim(analysis))
+
+write.csv(analysis, file.path(dir.EC, "data", "analysis.csv"), row.names = FALSE)
+
+
+# 3. Assemble the Q3 analysis table ----------------------------------------
+
+robustness_analysis <- robustness_scores %>%
+  left_join(analysis, by = keys, relationship = "many-to-one")
+
+q3_needed <- c(
+  "Robustness", "PC1", "PC2", "Site", "Year", "SampleRound",
+  "cascade_model", "scenario"
+)
+
+stopifnot(
+  all(q3_needed %in% names(robustness_analysis)),
+  all(robustness_analysis$scenario %in% names(q3_labels))
+)
+
+q3_data <- robustness_analysis %>%
+  select(all_of(q3_needed)) %>%
+  filter(
+    is.finite(Robustness), is.finite(PC1), is.finite(PC2),
+    !is.na(Site), !is.na(Year), !is.na(SampleRound)
+  ) %>%
+  mutate(
+    Site = factor(Site),
+    Year = factor(Year),
+    scenario = factor(scenario, levels = names(q3_labels)),
+    CommunityID = interaction(Site, Year, SampleRound, drop = TRUE)
   )
-  
-  model <- lmerTest::lmer(equation, data = dat)
-  
-  print(coef(summary(model)))
-  q2_models[[y]] <- model
-  saveRDS(model, file.path(diag.dir, paste0("Q2_", y, "_model.rds")))
-}
 
-## 6b. Checks and diagnostic PDFs -------------------------------------------
+# Check how many observations enter the model for each scenario.
+print(count(q3_data, cascade_model, scenario))
 
-q2_checks <- data.frame(
-  response = names(q2_models),
-  n = vapply(q2_models, nobs, numeric(1)),
-  singular = vapply(q2_models, performance::check_singularity, logical(1)),
-  site_sd = vapply(q2_models, function(model) {
-    as.numeric(attr(lme4::VarCorr(model)[["Site"]], "stddev"))
-  }, numeric(1)),
-  year_sd = vapply(q2_models, function(model) {
-    as.numeric(attr(lme4::VarCorr(model)[["Year"]], "stddev"))
-  }, numeric(1))
+
+# 4. Shared plot setup -----------------------------------------------------
+
+geography <- read.csv(
+  file.path(dir.SI_saved, "data", "relational", "original", "geography.csv")
 )
 
-print(q2_checks)
-write.csv(
-  q2_checks,
-  file.path(diag.dir, "Q2_model_checks.csv"),
-  row.names = FALSE
+# Order the site legend from north to south.
+site_order <- geography %>%
+  filter(!Site %in% c("JM", "CC", "SH")) %>%
+  group_by(Site) %>%
+  summarize(Lat = mean(Lat, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(Lat)) %>%
+  pull(Site)
+
+year_levels <- sort(unique(as.character(analysis$Year[!is.na(analysis$Year)])))
+
+lv <- list(site = site_order, year = year_levels)
+
+
+# 5. Q1: abundance, richness, Shannon diversity ----------------------------
+
+q1_dirs <- make_dirs(dir.EC, "Q1")
+
+## 5a. Fit  ----------------------------
+model_groups <- list(
+  abundance = fit_models(q1_abundance_ys, analysis, "nb",       q1_dirs$diag, "Q1 abundance"),
+  richness  = fit_models(q1_richness_ys,  analysis, "gaussian", q1_dirs$diag, "Q1 richness"),
+  shannon   = fit_models(q1_shannon_ys,   analysis, "gaussian", q1_dirs$diag, "Q1 shannon"),
+  fd = fit_models(q1_fd_ys, analysis, "gaussian", q1_dirs$diag, "Q1 functional diversity")
 )
 
-for (y in names(q2_models)) {
-  message("Writing Q2 diagnostics for ", y)
-  
-  pdf(
-    file.path(diag.dir, paste0("Q2_", y, "_diagnostics.pdf")),
-    width = 11, height = 8.5
-  )
-  
-  tryCatch({
-    diagnostics <- performance::check_model(q2_models[[y]], panel = TRUE)
-    print(plot(diagnostics))
-  }, error = function(err) {
-    warning("Q2 diagnostics failed for ", y, ": ", conditionMessage(err))
-  }, finally = dev.off())
-}
+# Keep these names for code that uses the individual model lists.
+abundance_models <- model_groups[["abundance"]]
+richness_models  <- model_groups[["richness"]]
+shannon_models   <- model_groups[["shannon"]]
+fd_models <- model_groups[["fd"]]
 
-## 6c. Plot Q2 climate effects ----------------------------------------------
+# All Q1 models in one named list.
+models <- do.call(c, unname(model_groups))
 
-q2_panel_order <- c(
-  "zfunctional.complementarity.HL",
-  "zFunRedundancy.Pols",
-  "zmean.number.of.links.HL",
-  "zfunctional.complementarity.LL",
-  "zFunRedundancy.Plants",
-  "zmean.number.of.links.LL"
-)
+## 5b. Checks and diagnostics  ----------------------------
+model_checks <- q1_model_checks(model_groups)
+print(model_checks)
+write_csv_rows(model_checks, file.path(q1_dirs$diag, "model_checks.csv"))
 
-q2_pvalues <- lapply(q2_models, function(model) {
-  coefficients <- coef(summary(model, ddf = "Satterthwaite"))
-  coefficients[c("PC1", "PC2"), "Pr(>|t|)"]
+with_pdf(file.path(q1_dirs$diag, "Q1_diagnostics.pdf"), 11, 8.5, {
+  for (y in names(models)) {
+    checks <- if (y == "HBAbundance") q1_checks_without_influence else "all"
+    diagnostics_page(models[[y]], y, checks)
+  }
 })
 
-# Inspect which slopes meet the cutoff.
-print(do.call(rbind, q2_pvalues))
+print_singular_fits(model_checks, models)
 
-pdf(
-  file.path(plot.dir, "Q2_scatterplots.pdf"),
-  width = 14, height = 8
+## 5c. Plot climate effects  ----------------------------
+q1_pvalues <- pvalue_matrix(models)
+print(q1_pvalues)
+
+ncol_q1 <- 4
+
+for (group in names(model_groups)) {
+  group_models <- model_groups[[group]]
+  ordered_ys <- names(group_models)[
+    order(match(response_key(names(group_models)), q1_panel_order))
+  ]
+  
+  test_line <- if (group == "abundance") {
+    "Solid lines indicate slopes with two-sided Wald z-test p < 0.05."
+  } else {
+    "Solid lines indicate slopes with two-sided Satterthwaite p < 0.05."
+  }
+  
+  write_scatter_pdf(
+    file = file.path(q1_dirs$plot, paste0("Q1_", group, "_scatterplots.pdf")),
+    models = group_models[ordered_ys],
+    pvalues = q1_pvalues,
+    lv = lv,
+    ncol = ncol_q1,
+    width = 14,
+    height = max(8, 3.5 * ceiling(length(group_models) / ncol_q1)),
+    caption = paste(
+      ci_note,
+      "The other climate PC is held at its mean among observations used in that model.",
+      test_line,
+      sep = "\n"
+    ),
+    y_label = function(y) q1_y_label(y, q1_suffix[[group]])
+  )
+}
+
+
+# 6. Q2: network metrics ---------------------------------------------------
+
+q2_dirs <- make_dirs(dir.EC, "Q2")
+
+## 6a. Fit  ----------------------------
+q2_models <- fit_models(
+  q2_ys, analysis, "gaussian", q2_dirs$diag, "Q2", file_prefix = "Q2_"
 )
 
-tryCatch({
-  for (pc in c("PC1", "PC2")) {
-    response_plots <- list()
-    
-    for (y in q2_panel_order)  {
-      model <- q2_models[[y]]
-      dat <- model.frame(model)
-      
-      stopifnot(all(as.character(dat$Site) %in% site_order))
-      dat$Site <- factor(dat$Site, levels = site_order)
-      dat$Year <- factor(dat$Year, levels = year_levels)
-      
-      # Vary the plotted PC and hold the other PC at its model-data mean.
-      scores <- seq(min(dat[[pc]]), max(dat[[pc]]), length.out = 100)
-      new_data <- data.frame(
-        PC1 = rep(mean(dat$PC1), length(scores)),
-        PC2 = rep(mean(dat$PC2), length(scores))
-      )
-      new_data[[pc]] <- scores
-      
-      X <- model.matrix(~ PC1 + PC2, data = new_data)
-      coef_names <- colnames(X)
-      beta <- lme4::fixef(model)[coef_names]
-      fixed_vcov <- as.matrix(vcov(model))[coef_names, coef_names, drop = FALSE]
-      
-      fitted <- drop(X %*% beta)
-      fit_se <- sqrt(rowSums((X %*% fixed_vcov) * X))
-      p_value <- q2_pvalues[[y]][[pc]]
-      line_type <- if (p_value < 0.05) "solid" else "dashed"
-      
-      fit_data <- data.frame(
-        score = scores,
-        fitted = fitted,
-        lower = fitted - 1.96 * fit_se,
-        upper = fitted + 1.96 * fit_se
-      )
-      
-      response_plots[[y]] <- ggplot(dat) +
-        geom_hline(yintercept = 0, linetype = "dotted", color = "gray55") +
-        geom_ribbon(
-          data = fit_data,
-          aes(x = score, ymin = lower, ymax = upper),
-          fill = "gray80", alpha = 0.4
-        ) +
-        geom_point(
-          aes(x = .data[[pc]], y = .data[[y]], color = Site, shape = Year),
-          alpha = 0.7, size = 2, show.legend = TRUE
-        ) +
-        geom_line(
-          data = fit_data,
-          aes(x = score, y = fitted),
-          color = "black", linewidth = 1, linetype = line_type
-        ) +
-        scale_color_discrete(limits = site_order, drop = FALSE) +
-        scale_shape_discrete(limits = year_levels, drop = FALSE) +
-        labs(
-          x = pc,
-          y = "Null-standardized z-score",
-          title = q2_labels[[y]],
-          color = "Site (N to S)",
-          shape = "Year"
-        ) +
-        theme_minimal(base_size = 12) +
-        theme(panel.grid.minor = element_blank())
-    }
-    
-    combined <- patchwork::wrap_plots(
-      response_plots, ncol = 3, guides = "collect"
-    ) +
-      patchwork::plot_annotation(
-        caption = paste(
-          "Shading shows approximate pointwise 95% confidence intervals for the fitted means.",
-          "The other climate PC is held at its mean among observations used in each model.",
-          "Solid fitted lines indicate slopes with two-sided Satterthwaite p < 0.05.",
-          "Dashed fitted lines indicate slopes with p >= 0.05. The dotted horizontal line marks the null expectation (z = 0).",
-          sep = "\n"
-        )
-      )
-    
-    print(combined & theme(legend.position = "right"))
+## 6b. Checks and diagnostics  ----------------------------
+q2_checks <- q2_model_checks(q2_models)
+print(q2_checks)
+write_csv_rows(q2_checks, file.path(q2_dirs$diag, "Q2_model_checks.csv"))
+
+for (y in names(q2_models)) {
+  write_diagnostics_pdf(
+    q2_models[[y]],
+    file.path(q2_dirs$diag, paste0("Q2_", y, "_diagnostics.pdf")),
+    label = paste("Q2", y)
+  )
+}
+
+## 6c. Plot climate effects  ----------------------------
+q2_pvalues <- pvalue_matrix(q2_models)
+print(q2_pvalues)  # which slopes meet the cutoff
+
+write_scatter_pdf(
+  file = file.path(q2_dirs$plot, "Q2_scatterplots.pdf"),
+  models = q2_models[q2_panel_order],
+  pvalues = q2_pvalues,
+  lv = lv,
+  ncol = 3,
+  width = 14,
+  height = 8,
+  caption = paste(
+    ci_note,
+    "The other climate PC is held at its mean among observations used in each model.",
+    "Solid fitted lines indicate slopes with two-sided Satterthwaite p < 0.05.",
+    "Dashed fitted lines indicate slopes with p >= 0.05. The dotted horizontal line marks the null expectation (z = 0).",
+    sep = "\n"
+  ),
+  y_label = function(y) "Null-standardized z-score",
+  title = function(y) q2_labels[[y]],
+  null_line = TRUE
+)
+
+
+# 7. Q3: extinction-cascade robustness -------------------------------------
+
+q3_dirs <- make_dirs(dir.EC, "Q3")
+
+## 7a. Fit  ----------------------------
+q3_models <- fit_q3_models(q3_data, q3_dirs$diag)
+
+## 7b. Checks and diagnostics  ----------------------------
+q3_checks <- q3_model_checks(q3_models, q3_data)
+print(q3_checks)
+write_csv_rows(q3_checks, file.path(q3_dirs$diag, "Q3_model_checks.csv"))
+
+for (cascade in names(q3_models)) {
+  for (scenario_name in names(q3_models[[cascade]])) {
+    write_diagnostics_pdf(
+      q3_models[[cascade]][[scenario_name]],
+      file.path(
+        q3_dirs$diag,
+        paste0("Q3_", cascade, "_", scenario_name, "_diagnostics.pdf")
+      ),
+      label = paste("Q3", cascade, scenario_name)
+    )
   }
-}, finally = dev.off())
+}
+
+## 7c. Plot climate effects  ----------------------------
+for (cascade in names(q3_models)) {
+  q3_pvalues <- pvalue_matrix(q3_models[[cascade]])
+  message("Q3 slope p-values | ", cascade)
+  print(q3_pvalues)
+  
+  write_q3_scatter_pdf(
+    file = file.path(q3_dirs$plot, paste0("Q3_", cascade, "_scatterplots.pdf")),
+    cascade = cascade,
+    models = q3_models[[cascade]],
+    pvalues = q3_pvalues,
+    lv = lv,
+    labels = q3_labels,
+    caption = paste(
+      ci_note,
+      "The other climate PC is held at its mean among observations used for that scenario.",
+      "Solid lines indicate unadjusted Satterthwaite p < 0.05. Dashed lines indicate p >= 0.05.",
+      sep = "\n"
+    )
+  )
+}
+
+
+# 8. Master climate slopes table -------------------------------------------
+
+q1_results <- lapply(names(models), function(y) {
+  slope_rows(models[[y]], "Q1", y)
+})
+
+q2_results <- lapply(names(q2_models), function(y) {
+  slope_rows(q2_models[[y]], "Q2", q2_labels[[y]])
+})
+
+q3_results <- lapply(names(q3_models), function(cascade) {
+  bind_rows(lapply(names(q3_models[[cascade]]), function(scenario_name) {
+    slope_rows(
+      q3_models[[cascade]][[scenario_name]], "Q3",
+      paste(cascade, "robustness"), q3_labels[[scenario_name]]
+    )
+  }))
+})
+
+# Match the unadjusted p < 0.05 cutoff used in the climate plots.
+master_results <- bind_rows(q1_results, q2_results, q3_results) %>%
+  mutate(
+    significance = case_when(
+      is.na(p_value) ~ "Unavailable",
+      p_value < 0.05 ~ "Significant",
+      TRUE ~ "Not significant"
+    )
+  )
+
+write.csv(
+  master_results,
+  file.path(dir.EC, "results", "climate_models", "master_climate_results.csv"),
+  row.names = FALSE, na = ""
+)
